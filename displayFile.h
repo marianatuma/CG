@@ -7,14 +7,10 @@
 class DisplayFile {
 private:
 	std::list<GraphObj*>* objectList;	
-	std::list<GraphObj*>::iterator it;
-	int size;
 public:
 	DisplayFile();
 	void add(GraphObj* g);
-	GraphObj* getNextObject();
-	void resetIterator();
-	int getSize();
+	std::list<GraphObj*>* getObjects();
 };
 
 #endif

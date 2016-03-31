@@ -4,49 +4,50 @@
 #include "line.h"
 #include <iostream>
 
-/*
-struct {
-  int count;
-  double coordx[100];
-  double coordy[100];
-} glob;
-*/
 DisplayFile *df;
+double vOffset, hOffset;
+double zoom;
+double STEP = 10.0;
+double VPMAX_X = 80.0;
+double VPMAX_Y = 80.0;
+double WMAX_X = 80.0;
+double WMAX_Y = 80.0;
+
+
+double transformY(double y) {
+  double yvp = (1-(y/WMAX_Y))*VPMAX_Y;
+  return yvp;
+}
+
+double transformX(double x) {
+  double xvp = (x/(WMAX_X))*VPMAX_X;
+  return xvp;
+}
+
+void drawLine(cairo_t *cr, GraphObj* g) {
+  Line* l = static_cast<Line*>(g);
+  cairo_move_to(cr, transformX(l->getStart()->x), transformY(l->getStart()->y));
+  cairo_line_to(cr, transformX(l->getEnd()->x), transformY(l->getEnd()->y));
+  cairo_stroke(cr);
+}
 
 static void do_drawing(cairo_t *cr)
 {
   cairo_set_source_rgb(cr, 0, 0, 0);
   cairo_set_line_width(cr, 0.5);
 
-  int size = df->getSize();
-
-    Line* g = (Line*)df->getNextObject();
-    point* start = g->getStart();
-
-    double x = start->x;
-
-    //point* end = g->getEnd();
-    //cairo_move_to(cr, start->x, start->y);
-    //cairo_line_to(cr, end->x, end->y);
-
-    //cairo_stroke(cr);
-
-    //free(s);
-    //free(e);
-  
-/*
-  int i, j;
-  for (i = 0; i <= glob.count - 1; i++ ) {
-      for (j = 0; j <= glob.count - 1; j++ ) {
-      	std::cout << i << " " << j << "\n";
-          cairo_move_to(cr, glob.coordx[i], glob.coordy[i]);
-          cairo_line_to(cr, glob.coordx[j], glob.coordy[j]);
-      }
+  std::list<GraphObj*>* objectList= df->getObjects();
+    
+  for (std::list<GraphObj*>::const_iterator it = objectList->begin();
+    it != objectList->end();
+    ++it) {
+    GraphObj* g = *it;
+    if(type::LINE == g->getType()) {
+      drawLine(cr, g);
+    }
   }
-
-  cairo_stroke(cr);    
-  */
 }
+
 
 static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr, 
     gpointer user_data)
@@ -56,6 +57,7 @@ static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr,
   return FALSE;
 }
 
+/*
 static gboolean clicked(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
@@ -63,36 +65,59 @@ static gboolean clicked(GtkWidget *widget, GdkEventButton *event,
     
     return TRUE;
 }
+*/
+
+static gboolean moveUp(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+    vOffset += STEP;    
+    return TRUE;
+}
+
+static gboolean moveDown(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+    vOffset -= STEP;    
+    return TRUE;
+}
+
+static gboolean moveRight(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+    hOffset += STEP;    
+    return TRUE;
+}
+
+static gboolean moveLeft(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+    hOffset -= STEP;    
+    return TRUE;
+}
+
 
 int main(int argc, char **argv)
 {
     GtkBuilder *builder;
-    GtkWidget  *window, *viewport;
+    GtkWidget  *window, *viewport, *buttonUp,
+     *buttonDown, *buttonLeft, *buttonRight, *zoomIn, *zoomOut;
+    GtkDrawingArea *drawingArea;
     GError     *error = NULL;
+    
     df = new DisplayFile(); 
+    vOffset = 0.0;
+    hOffset = 0.0;
+    zoom = 0.0;
 
-/*    
-    glob.count = 0;
-
-    glob.coordx[0] = 1;
-    glob.coordy[0] = -2;
-    glob.count++;
-
-    glob.coordx[1] = 40;
-    glob.coordy[1] = -40;
-    glob.count++;
-
-    glob.coordx[2] = 55;
-    glob.coordy[2] = 77;
-    glob.count++;
-
-    glob.coordx[3] = 10;
-    glob.coordy[3] = 70;
-    glob.count++;
- */   
     Line* l = new Line(type::LINE, "line");
-    l->setStart(2, 30);
-    l->setEnd(2, -30);
+    l->setStart(0, 0);
+    l->setEnd(800, 800);
+
+    df->add(l);
+
+    l = new Line(type::LINE, "line");
+    l->setStart(8, 60);
+    l->setEnd(8, 110);
 
     df->add(l);
     /* Init GTK+ */
@@ -113,8 +138,17 @@ int main(int argc, char **argv)
     /* Get main window pointer from UI */
     window = GTK_WIDGET( gtk_builder_get_object( builder, "mainWindow" ) );
     viewport = GTK_WIDGET(gtk_builder_get_object(builder, "viewport"));
+    drawingArea = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "drawingarea"));
+    buttonUp = GTK_WIDGET(gtk_builder_get_object(builder, "buttonUp"));
+    buttonLeft = GTK_WIDGET(gtk_builder_get_object(builder, "buttonLeft"));
+    buttonRight = GTK_WIDGET(gtk_builder_get_object(builder, "buttonRight"));
+    buttonDown = GTK_WIDGET(gtk_builder_get_object(builder, "buttonDown"));
 
-    g_signal_connect(G_OBJECT(viewport), "draw", G_CALLBACK(on_draw_event), NULL); 
+    g_signal_connect(G_OBJECT(drawingArea), "draw", G_CALLBACK(on_draw_event), NULL); 
+    g_signal_connect(G_OBJECT(buttonUp), "clicked", G_CALLBACK(moveUp), NULL);
+    g_signal_connect(G_OBJECT(buttonDown), "clicked", G_CALLBACK(moveDown), NULL);
+    g_signal_connect(G_OBJECT(buttonLeft), "clicked", G_CALLBACK(moveLeft), NULL);
+    g_signal_connect(G_OBJECT(buttonRight), "clicked", G_CALLBACK(moveRight), NULL);
 
     /* Connect signals */
     gtk_builder_connect_signals( builder, NULL );
@@ -123,8 +157,7 @@ int main(int argc, char **argv)
     g_object_unref( G_OBJECT( builder ) );
 
     /* Show window. All other widgets are automatically shown by GtkBuilder */
-    gtk_widget_show( window );
-
+    gtk_widget_show_all( window );
 
     /* Start main loop */
     gtk_main();
