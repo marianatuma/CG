@@ -18,3 +18,17 @@ point* Line::getStart() {
 point* Line::getEnd() {
 	return &end;
 }
+
+point Line::getCenter() {
+	point center;
+	center.x = (start.x+end.x)/2;
+	center.y = (start.y+end.y)/2;
+	return center;
+}
+
+std::list<point>* Line::getPoints() {
+	points->clear();
+	points->push_back(this->start);
+	points->push_back(this->end);
+	return points;
+}

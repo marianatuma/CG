@@ -1,49 +1,124 @@
 #include <gtk/gtk.h>
 #include <cairo.h>
-#include "displayFile.h"
+#include <math.h>
+#include <string>
 #include "line.h"
+#include "viewport.h"
+#include "window.h"
+#include "displayFile.h"
+#include "polygon.h"
+#include "point.h"
 #include <iostream>
 
-DisplayFile *df;
-double vOffset, hOffset;
-double zoom;
-double STEP = 10.0;
-double VPMAX_X = 80.0;
-double VPMAX_Y = 80.0;
-double WMAX_X = 80.0;
-double WMAX_Y = 80.0;
+DisplayFile *displayFile;
+GtkWidget   *displayObjects, *mainWindow;
+GtkEntry    *xStartInput, *yStartInput, *xEndInput, *yEndInput,
+            *newPolyX, *newPolyY, *newPolyName, *newLineName,
+            *newPointX, *newPointY, *newPointName, *translateX,
+            *translateY;
+GraphObj    *selectedObj;
+gchar       *selectedName;        
+Viewport    *viewportData;
+Window      *windowData;
+Polygon     *newPoly;
 
+enum {
+  COL_X = 0, COL_Y, NUM_COLS
+};
+
+enum {
+  COL_NAME = 0, COL_POINTER, NUM_COLS_NAME
+};
+
+double STEP = 10.0;
+double ZOOM = 1.05;
+double lineThickness = 0.05;
+double pointThickness = 0.1;
+double thicknessIncrement = 10.0;
 
 double transformY(double y) {
-  double yvp = (1-(y/WMAX_Y))*VPMAX_Y;
+  double yvp = (1-((y - windowData->getYMin()) / (windowData->getYMax() - windowData->getYMin())))*viewportData->getYMax();
   return yvp;
 }
 
 double transformX(double x) {
-  double xvp = (x/(WMAX_X))*VPMAX_X;
+  double xvp = ((x - windowData->getXMin()) / (windowData->getXMax() - windowData->getXMin()))*viewportData->getXMax();
   return xvp;
+}
+
+void connectTwoPoints(cairo_t *cr, point *start, point *end) {
+  cairo_move_to(cr, transformX(start->x), transformY(start->y));
+  cairo_line_to(cr, transformX(end->x), transformY(end->y));
+  cairo_stroke(cr);
+}
+
+void drawCircle(cairo_t *cr, point *center, double radius) {
+  cairo_arc(cr, transformX(center->x), transformY(center->y), radius, 0, 2 * M_PI);
+  cairo_stroke_preserve(cr);
+}
+
+void drawPoint(cairo_t *cr, GraphObj* g) {
+  Point* p = static_cast<Point*>(g);
+  drawCircle(cr, p->getPoint(), pointThickness*thicknessIncrement);
+  cairo_fill(cr); 
 }
 
 void drawLine(cairo_t *cr, GraphObj* g) {
   Line* l = static_cast<Line*>(g);
-  cairo_move_to(cr, transformX(l->getStart()->x), transformY(l->getStart()->y));
-  cairo_line_to(cr, transformX(l->getEnd()->x), transformY(l->getEnd()->y));
-  cairo_stroke(cr);
+  connectTwoPoints(cr, l->getStart(), l->getEnd());
+}
+
+void drawPolygon(cairo_t *cr, GraphObj* g) {
+  Polygon* p = static_cast<Polygon*>(g);
+  std::list<point>* points = p->getPoints();
+  point first = points->front();
+  point tempStart, tempEnd;
+
+  for (std::list<point>::const_iterator it = points->begin();
+    it != points->end();
+    ++it) {
+      tempStart = tempEnd;
+      tempEnd = *it; 
+      if(it != points->begin()){
+        connectTwoPoints(cr, &tempStart, &tempEnd);
+      }
+  }
+  //fecha o poligono
+  connectTwoPoints(cr, &tempEnd, &first);
 }
 
 static void do_drawing(cairo_t *cr)
 {
   cairo_set_source_rgb(cr, 0, 0, 0);
-  cairo_set_line_width(cr, 0.5);
+  cairo_set_line_width(cr, lineThickness*thicknessIncrement);
 
-  std::list<GraphObj*>* objectList= df->getObjects();
+  GtkTreeIter iter_objects;
+  GtkListStore* liststore = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(displayObjects)));
+  gtk_list_store_clear(liststore);
+  GraphObj *g;
+  type t;
+
+  std::list<GraphObj*>* objectList= displayFile->getObjects();
     
   for (std::list<GraphObj*>::const_iterator it = objectList->begin();
     it != objectList->end();
     ++it) {
-    GraphObj* g = *it;
-    if(type::LINE == g->getType()) {
-      drawLine(cr, g);
+    g = *it;
+    t = g->getType();
+
+    gtk_list_store_append(liststore, &iter_objects);
+    gtk_list_store_set(liststore, &iter_objects, COL_NAME, g->getName().c_str(), COL_POINTER, g, -1);
+
+    switch(t) {
+      case type::LINE:
+        drawLine(cr, g);
+        break;
+      case type::POLYGON:
+        drawPolygon(cr, g);
+        break;
+      case type::POINT:
+        drawPoint(cr, g);
+        break;
     }
   }
 }
@@ -57,69 +132,323 @@ static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr,
   return FALSE;
 }
 
-/*
-static gboolean clicked(GtkWidget *widget, GdkEventButton *event,
-    gpointer user_data)
-{
-    gtk_widget_queue_draw(widget);
-    
-    return TRUE;
-}
-*/
-
 static gboolean moveUp(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
-    vOffset += STEP;    
+    windowData->moveY(STEP);
+    gtk_widget_queue_draw((GtkWidget*) user_data);
     return TRUE;
 }
 
 static gboolean moveDown(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
-    vOffset -= STEP;    
+    windowData->moveY(-STEP);
+    gtk_widget_queue_draw((GtkWidget*) user_data);
     return TRUE;
 }
 
 static gboolean moveRight(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
-    hOffset += STEP;    
+    windowData->moveX(STEP);    
+    gtk_widget_queue_draw((GtkWidget*) user_data);
     return TRUE;
 }
 
 static gboolean moveLeft(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
-    hOffset -= STEP;    
+    windowData->moveX(-STEP);    
+    gtk_widget_queue_draw((GtkWidget*) user_data);
     return TRUE;
 }
 
+static gboolean zoomIn(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+    thicknessIncrement += 1.0;
+    windowData->zoomIn(ZOOM);    
+    gtk_widget_queue_draw((GtkWidget*) user_data);
+    return TRUE;
+}
+
+static gboolean zoomOut(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+    if(thicknessIncrement > 5.0)
+      thicknessIncrement -= 1.0;
+    windowData->zoomOut(ZOOM);    
+    gtk_widget_queue_draw((GtkWidget*) user_data);
+    return TRUE;
+}
+
+static gboolean translate(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+    point pivot;
+    pivot.x = atof(gtk_entry_get_text(GTK_ENTRY(translateX)));
+    pivot.y = atof(gtk_entry_get_text(GTK_ENTRY(translateY)));
+
+    point center = selectedObj->getCenter();
+    double distance = Utils::distance(pivot, center);
+
+    /*std::list<point>* points = selectedObj->getPoints();
+    std::list<point>* translated = new std::list<point>();
+    point translatedPoint;
+    distance = Utils::distance(pivot, center);
+
+    for (std::list<point>::const_iterator it = points->begin();
+    it != points->end();
+    ++it) {
+      translatedPoint = Utils::translatePoint(*it, distance);
+      translated->push_back(translatedPoint);
+    } */
+
+    gtk_widget_destroy((GtkWidget*) user_data);
+    return TRUE;
+}
+
+static gboolean translateWindow(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data) {
+  GtkBuilder *builder;
+  GError *error = NULL;
+  
+  builder = gtk_builder_new();
+
+  if (!gtk_builder_add_from_file(builder, "translate.glade", &error)) {
+    g_warning("%s", error->message);
+    g_free(error);
+  }
+
+  GtkWidget *translateWindow = GTK_WIDGET( gtk_builder_get_object( builder, "translateWindow" ) );
+  translateX = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "translateX"));
+  translateY = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "translateY"));
+  
+  GtkWidget* okButton = GTK_WIDGET(gtk_builder_get_object(builder, "okButton"));
+
+  g_signal_connect(G_OBJECT(okButton), "clicked", G_CALLBACK(translate), translateWindow);
+  
+  gtk_builder_connect_signals(builder, NULL);
+  g_object_unref(G_OBJECT(builder));
+  gtk_widget_show_all(translateWindow);
+  gtk_main();
+
+  return TRUE;
+}
+
+static gboolean addNewLine(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+  double startX = atof(gtk_entry_get_text(GTK_ENTRY(xStartInput)));
+  double startY = atof(gtk_entry_get_text(GTK_ENTRY(yStartInput)));
+  double endX = atof(gtk_entry_get_text(GTK_ENTRY(xEndInput)));
+  double endY = atof(gtk_entry_get_text(GTK_ENTRY(yEndInput)));
+
+  Line* newLine = new Line(gtk_entry_get_text(GTK_ENTRY(newLineName)));
+  newLine->setStart(startX, startY);
+  newLine->setEnd(endX, endY);
+
+  displayFile->add(newLine);
+  gtk_widget_destroy((GtkWidget*) user_data);
+
+  return TRUE;
+}
+
+static gboolean addNewPoint(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+  double x = atof(gtk_entry_get_text(GTK_ENTRY(newPointX)));
+  double y = atof(gtk_entry_get_text(GTK_ENTRY(newPointY)));
+
+  Point* newPoint = new Point(gtk_entry_get_text(GTK_ENTRY(newPointName)));
+  newPoint->setPoint(x, y);
+  
+  displayFile->add(newPoint);
+  gtk_widget_destroy((GtkWidget*) user_data);
+
+  return TRUE;
+}
+
+static gboolean addNewPointToPoly(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+  newPoly->addPoint(atof(gtk_entry_get_text(GTK_ENTRY(newPolyX))), atof(gtk_entry_get_text(GTK_ENTRY(newPolyY))));
+  gtk_entry_set_text(newPolyX, "");
+  gtk_entry_set_text(newPolyY, "");
+  return TRUE;
+}
+
+static gboolean closeNewPoly(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+  //.c_str()
+  newPoly->changeName(gtk_entry_get_text(GTK_ENTRY(newPolyName)));
+  displayFile->add(newPoly);
+  gtk_widget_destroy((GtkWidget*) user_data);
+}
+
+static gboolean newLineWindow(GtkWidget *widget, gpointer user_data)
+{
+  GtkBuilder *builder;
+  GError *error = NULL;
+  
+  builder = gtk_builder_new();
+
+  if (!gtk_builder_add_from_file(builder, "newLine.glade", &error)) {
+    g_warning("%s", error->message);
+    g_free(error);
+  }
+
+  GtkWidget *windowLine = GTK_WIDGET( gtk_builder_get_object( builder, "newLineWindow" ) );
+  xStartInput = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "startX"));
+  yStartInput = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "startY"));
+  xEndInput = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "endX"));
+  yEndInput = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "endY"));
+  newLineName = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "newLineName"));
+
+  GtkWidget* okButton = GTK_WIDGET(gtk_builder_get_object(builder, "okButton"));
+
+  g_signal_connect(G_OBJECT(okButton), "clicked", G_CALLBACK(addNewLine), windowLine);
+
+  gtk_builder_connect_signals(builder, NULL);
+  g_object_unref(G_OBJECT(builder));
+  gtk_widget_show_all(windowLine);
+  gtk_main();
+
+  return TRUE;
+}
+
+static gboolean newPolygonWindow(GtkWidget *widget, gpointer user_data)
+{
+  GtkBuilder *builder;
+  GError *error = NULL;
+  
+  builder = gtk_builder_new();
+
+  if (!gtk_builder_add_from_file(builder, "newPolygon.glade", &error)) {
+    g_warning("%s", error->message);
+    g_free(error);
+  }
+
+  GtkWidget *windowPoly = GTK_WIDGET( gtk_builder_get_object( builder, "newPolygonWindow" ) );
+  newPolyX = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "newPolyX"));
+  newPolyY = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "newPolyY"));
+  newPolyName = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "newPolyName"));
+  
+  GtkWidget* addButton = GTK_WIDGET(gtk_builder_get_object(builder, "addPolyPoint"));
+  GtkWidget* doneButton = GTK_WIDGET(gtk_builder_get_object(builder, "donePoly"));
+
+  newPoly = new Polygon("");
+  g_signal_connect(G_OBJECT(addButton), "clicked", G_CALLBACK(addNewPointToPoly), NULL);
+  g_signal_connect(G_OBJECT(doneButton), "clicked", G_CALLBACK(closeNewPoly), windowPoly);
+
+  gtk_builder_connect_signals(builder, NULL);
+  g_object_unref(G_OBJECT(builder));
+  gtk_widget_show_all(windowPoly);
+  gtk_main();
+
+  return TRUE;
+}
+
+static gboolean newPointWindow(GtkWidget *widget, gpointer user_data)
+{
+  GtkBuilder *builder;
+  GError *error = NULL;
+  
+  builder = gtk_builder_new();
+
+  if (!gtk_builder_add_from_file(builder, "newPoint.glade", &error)) {
+    g_warning("%s", error->message);
+    g_free(error);
+  }
+
+  GtkWidget *windowPoint = GTK_WIDGET( gtk_builder_get_object( builder, "newPointWindow" ) );
+  newPointX = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "pointX"));
+  newPointY = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "pointY"));
+  newPointName = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "newPointName"));
+  
+  GtkWidget* okButton = GTK_WIDGET(gtk_builder_get_object(builder, "okButton"));
+
+  g_signal_connect(G_OBJECT(okButton), "clicked", G_CALLBACK(addNewPoint), windowPoint);
+  
+  gtk_builder_connect_signals(builder, NULL);
+  g_object_unref(G_OBJECT(builder));
+  gtk_widget_show_all(windowPoint);
+  gtk_main();
+
+  return TRUE;
+}
+
+static GtkTreeModel* create_and_fill_model() {
+  GtkListStore *store;
+  store = gtk_list_store_new(NUM_COLS_NAME, G_TYPE_STRING, G_TYPE_POINTER);
+  return GTK_TREE_MODEL(store);
+}
+
+static GtkWidget* create_view_and_model() {
+  GtkCellRenderer *renderer;
+  GtkTreeModel *model;
+  GtkWidget *view;
+  
+  view = gtk_tree_view_new();
+
+  renderer = gtk_cell_renderer_text_new();
+  gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view), -1, "Object: ", renderer, "text", COL_NAME, NULL);
+
+  model = create_and_fill_model();
+  gtk_tree_view_set_model(GTK_TREE_VIEW(view), model);
+  g_object_unref(model);
+
+  return view;
+}
+
+static void tree_selection_changed(GtkTreeSelection *selection, gpointer data) {
+  GtkTreeIter iter;
+  GtkTreeModel *model;
+  gchar *obj;
+
+  if(gtk_tree_selection_get_selected(selection, &model, &iter)) {
+    gtk_tree_model_get(model, &iter, COL_NAME, &obj, -1);
+    selectedName = obj;
+    if(displayFile->getByName((std::string)selectedName) != NULL)
+      selectedObj = displayFile->getByName((std::string)selectedName);
+    g_free(obj);
+  }
+
+}
+
+static void exit_app(GtkWidget* widget, gpointer data) {
+  gtk_main_quit();
+}
 
 int main(int argc, char **argv)
 {
-    GtkBuilder *builder;
-    GtkWidget  *window, *viewport, *buttonUp,
-     *buttonDown, *buttonLeft, *buttonRight, *zoomIn, *zoomOut;
-    GtkDrawingArea *drawingArea;
-    GError     *error = NULL;
+    GtkBuilder      *builder;
+    GtkWidget       *viewport, *buttonUp,
+     *buttonDown,   *buttonLeft, *buttonRight, *buttonZoomIn,
+     *buttonZoomOut, *newLine, *listWindow, *mainBox, *buttonClose,
+     *newPolygon, *newPoint, *translateButton;
+    GtkDrawingArea  *drawingArea;
+    GtkTreeSelection *selected;
+    GError          *error = NULL;
+
+    viewportData = new Viewport(300.0, 100.0);
+    windowData = new Window(300.0, 100.0);
     
-    df = new DisplayFile(); 
-    vOffset = 0.0;
-    hOffset = 0.0;
-    zoom = 0.0;
+    displayFile = new DisplayFile(); 
+    
+    Line* l = new Line("line");
+    l->setStart(10, 10);
+    l->setEnd(50, 100);
+    displayFile->add(l);
 
-    Line* l = new Line(type::LINE, "line");
-    l->setStart(0, 0);
-    l->setEnd(800, 800);
+    l = new Line("line2");
+    l->setStart(5, 5);
+    l->setEnd(500, 15);
+    displayFile->add(l);
 
-    df->add(l);
 
-    l = new Line(type::LINE, "line");
-    l->setStart(8, 60);
-    l->setEnd(8, 110);
-
-    df->add(l);
     /* Init GTK+ */
 
     gtk_init( &argc, &argv );
@@ -136,19 +465,45 @@ int main(int argc, char **argv)
     }
 
     /* Get main window pointer from UI */
-    window = GTK_WIDGET( gtk_builder_get_object( builder, "mainWindow" ) );
+    mainWindow = GTK_WIDGET( gtk_builder_get_object( builder, "mainWindow" ) );
     viewport = GTK_WIDGET(gtk_builder_get_object(builder, "viewport"));
     drawingArea = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "drawingarea"));
+    listWindow = GTK_WIDGET(gtk_builder_get_object(builder, "listWindow"));
+    buttonClose = GTK_WIDGET(gtk_builder_get_object(builder, "buttonClose"));
+    mainBox = GTK_WIDGET(gtk_builder_get_object(builder, "mainBox"));
     buttonUp = GTK_WIDGET(gtk_builder_get_object(builder, "buttonUp"));
     buttonLeft = GTK_WIDGET(gtk_builder_get_object(builder, "buttonLeft"));
     buttonRight = GTK_WIDGET(gtk_builder_get_object(builder, "buttonRight"));
     buttonDown = GTK_WIDGET(gtk_builder_get_object(builder, "buttonDown"));
+    buttonZoomIn = GTK_WIDGET(gtk_builder_get_object(builder, "zoomIn"));
+    buttonZoomOut = GTK_WIDGET(gtk_builder_get_object(builder, "zoomOut"));
+    translateButton = GTK_WIDGET(gtk_builder_get_object(builder, "translateButton"));
+    newPolygon = GTK_WIDGET(gtk_builder_get_object(builder, "newPolygon"));
+    newLine = GTK_WIDGET(gtk_builder_get_object(builder, "newLine"));
+    newPoint = GTK_WIDGET(gtk_builder_get_object(builder, "newPoint"));
 
+    displayObjects = create_view_and_model();
+
+    gtk_container_add(GTK_CONTAINER(listWindow), displayObjects);
+    gtk_box_pack_end(GTK_BOX(mainBox), listWindow, (gboolean) TRUE, (gboolean) TRUE, 0);
+    
+    selected = gtk_tree_view_get_selection(GTK_TREE_VIEW(displayObjects));
+    gtk_tree_selection_set_mode(selected, GTK_SELECTION_SINGLE);
+    
+    g_signal_connect(G_OBJECT(selected),"changed", G_CALLBACK(tree_selection_changed), NULL);
+    g_signal_connect(mainWindow, "delete_event", G_CALLBACK(exit_app), NULL);
+    g_signal_connect(buttonClose, "clicked", G_CALLBACK(exit_app), NULL);
     g_signal_connect(G_OBJECT(drawingArea), "draw", G_CALLBACK(on_draw_event), NULL); 
-    g_signal_connect(G_OBJECT(buttonUp), "clicked", G_CALLBACK(moveUp), NULL);
-    g_signal_connect(G_OBJECT(buttonDown), "clicked", G_CALLBACK(moveDown), NULL);
-    g_signal_connect(G_OBJECT(buttonLeft), "clicked", G_CALLBACK(moveLeft), NULL);
-    g_signal_connect(G_OBJECT(buttonRight), "clicked", G_CALLBACK(moveRight), NULL);
+    g_signal_connect(G_OBJECT(buttonUp), "clicked", G_CALLBACK(moveUp), mainWindow);
+    g_signal_connect(G_OBJECT(buttonDown), "clicked", G_CALLBACK(moveDown), mainWindow);
+    g_signal_connect(G_OBJECT(buttonLeft), "clicked", G_CALLBACK(moveLeft), mainWindow);
+    g_signal_connect(G_OBJECT(buttonRight), "clicked", G_CALLBACK(moveRight), mainWindow);
+    g_signal_connect(G_OBJECT(buttonZoomIn), "clicked", G_CALLBACK(zoomIn), mainWindow);
+    g_signal_connect(G_OBJECT(buttonZoomOut), "clicked", G_CALLBACK(zoomOut), mainWindow);
+    g_signal_connect(G_OBJECT(translateButton), "clicked", G_CALLBACK(translateWindow), mainWindow);
+    g_signal_connect(G_OBJECT(newLine), "clicked", G_CALLBACK(newLineWindow), NULL);
+    g_signal_connect(G_OBJECT(newPolygon), "clicked", G_CALLBACK(newPolygonWindow), NULL);
+    g_signal_connect(G_OBJECT(newPoint), "clicked", G_CALLBACK(newPointWindow), NULL);
 
     /* Connect signals */
     gtk_builder_connect_signals( builder, NULL );
@@ -157,7 +512,7 @@ int main(int argc, char **argv)
     g_object_unref( G_OBJECT( builder ) );
 
     /* Show window. All other widgets are automatically shown by GtkBuilder */
-    gtk_widget_show_all( window );
+    gtk_widget_show_all( mainWindow );
 
     /* Start main loop */
     gtk_main();

@@ -1,6 +1,6 @@
 #include "graphObj.h"
 
-GraphObj::GraphObj(type t, std::string name) {
+GraphObj::GraphObj(std::string name, type t) {
 	this->t = t;
 	this->name = name;	
 }
@@ -11,4 +11,12 @@ type GraphObj::getType() {
 
 std::string GraphObj::getName() {
 	return this->name;
+}
+
+void GraphObj::changeName(std::string newName) {
+	this->name = newName;
+}
+
+void GraphObj::setPoints(std::list<point>* newPoints){
+	this->points = newPoints;
 }

@@ -2,6 +2,7 @@
 #define DISPLAYFILE_H
 
 #include <list>
+#include <string>
 #include "graphObj.h"
 
 class DisplayFile {
@@ -10,7 +11,9 @@ private:
 public:
 	DisplayFile();
 	void add(GraphObj* g);
+	void remove(GraphObj *g);
 	std::list<GraphObj*>* getObjects();
+	GraphObj* getByName(std::string name);
 };
 
 #endif
