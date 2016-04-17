@@ -10,14 +10,14 @@
 #include <iostream>
 
 DisplayFile *displayFile;
-GtkWidget   *displayObjects, *mainWindow, *smallerChoice;
+GtkBuilder  *mainBuilder;
+GtkWidget   *mainWindow, *smallerChoice;
 GtkEntry    *xStartInput, *yStartInput, *xEndInput, *yEndInput,
             *newPolyX, *newPolyY, *newPolyName, *newLineName,
             *newPointX, *newPointY, *newPointName, *translateX,
             *translateY, *scaleFactor, *rotationAngle, 
             *rotationCenterX, *rotationCenterY;
 GraphObj    *selectedObj;
-gchar       *selectedName;        
 Viewport    *viewportData;
 Window      *windowData;
 Polygon     *newPoly;
@@ -83,6 +83,19 @@ void drawPolygon(cairo_t *cr, GraphObj* g) {
   //fecha o poligono
   connectTwoPoints(cr, &tempEnd, &first);
 }
+void clearList() {
+  GtkListStore *listStoreObjects = GTK_LIST_STORE(
+      gtk_builder_get_object( mainBuilder, "listStoreObjects"));
+  gtk_list_store_clear(listStoreObjects);
+}
+
+void addObjectToList(const char* name){
+  GtkListStore *listStoreObjects = GTK_LIST_STORE(
+      gtk_builder_get_object( mainBuilder, "listStoreObjects"));
+  GtkTreeIter iter;
+  gtk_list_store_append(listStoreObjects, &iter);
+  gtk_list_store_set(listStoreObjects, &iter, 0, name, -1);  
+}
 
 static void do_drawing(cairo_t *cr)
 {
@@ -90,10 +103,10 @@ static void do_drawing(cairo_t *cr)
   cairo_set_line_width(cr, lineThickness*thicknessIncrement);
 
   GtkTreeIter iter_objects;
-  GtkListStore* liststore = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(displayObjects)));
-  gtk_list_store_clear(liststore);
   GraphObj *g;
   type t;
+  
+  clearList();
 
   std::list<GraphObj*>* objectList= displayFile->getObjects();
     
@@ -103,8 +116,7 @@ static void do_drawing(cairo_t *cr)
     g = *it;
     t = g->getType();
 
-    gtk_list_store_append(liststore, &iter_objects);
-    gtk_list_store_set(liststore, &iter_objects, COL_NAME, g->getName().c_str(), COL_POINTER, g, -1);
+    addObjectToList(g->getName().c_str());
 
     switch(t) {
       case type::POLYGON:
@@ -177,6 +189,37 @@ static gboolean zoomOut(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
+
+static GraphObj* getSelected() {
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(gtk_builder_get_object( mainBuilder, "objTree")));
+  GtkTreeModel *model;
+  GtkTreeIter iter;
+  
+  if(gtk_tree_selection_get_selected(selection, &model, &iter)) {
+    
+    gchar *name;        
+    gtk_tree_model_get(model, &iter, COL_NAME, &name, -1);
+    
+    if(displayFile->getByName((std::string)name) != NULL){
+      GraphObj *selectedObj;
+      selectedObj = displayFile->getByName((std::string)name);
+      g_free(name);
+      return selectedObj;
+
+    } else {
+      
+      GtkDialogFlags flags = GTK_DIALOG_DESTROY_WITH_PARENT;
+      GtkWidget *dialog = gtk_message_dialog_new(
+          GTK_WINDOW(gtk_builder_get_object( mainBuilder, "mainWindow" )),
+          flags, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "Select an object");
+      gtk_dialog_run(GTK_DIALOG(dialog));
+      gtk_widget_destroy(dialog);
+    }
+  }
+  return selectedObj;
+}
+
 static gboolean translate(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
@@ -206,6 +249,9 @@ static gboolean translate(GtkWidget *widget, GdkEventButton *event,
 
 static gboolean translateWindow(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data) {
+  
+  selectedObj = getSelected();
+
   GtkBuilder *builder;
   GError *error = NULL;
   
@@ -264,6 +310,8 @@ static gboolean scale(GtkWidget *widget, GdkEventButton *event,
 
 static gboolean scaleWindow(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data) {
+  selectedObj = getSelected();
+
   GtkBuilder *builder;
   GError *error = NULL;
   
@@ -296,11 +344,12 @@ static gboolean rotate(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
   double angle = atof(gtk_entry_get_text(GTK_ENTRY(rotationAngle)));
+
   point center;
 
   if(gtk_entry_get_text_length (GTK_ENTRY(rotationCenterX)) == 0 && 
     gtk_entry_get_text_length (GTK_ENTRY(rotationCenterY)) == 0) {
-    point center = selectedObj->getCenter();
+    center = selectedObj->getCenter();
   } else {
     center.x = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
     center.y = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
@@ -327,6 +376,8 @@ static gboolean rotate(GtkWidget *widget, GdkEventButton *event,
 
 static gboolean rotateWindow(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data) {
+  selectedObj = getSelected();
+
   GtkBuilder *builder;
   GError *error = NULL;
   
@@ -521,37 +572,18 @@ static GtkWidget* create_view_and_model() {
   return view;
 }
 
-static void tree_selection_changed(GtkTreeSelection *selection, gpointer data) {
-  GtkTreeIter iter;
-  GtkTreeModel *model;
-  gchar *obj;
-
-  if(gtk_tree_selection_get_selected(selection, &model, &iter)) {
-    gtk_tree_model_get(model, &iter, COL_NAME, &obj, -1);
-    selectedName = obj;
-    if(displayFile->getByName((std::string)selectedName) != NULL){
-      std::cout << selectedName << "\n";
-      selectedObj = displayFile->getByName((std::string)selectedName);
-    }
-    g_free(obj);
-  }
-
-}
-
 static void exit_app(GtkWidget* widget, gpointer data) {
   gtk_main_quit();
 }
 
 int main(int argc, char **argv)
 {
-    GtkBuilder      *builder;
     GtkWidget       *viewport, *buttonUp,
      *buttonDown,   *buttonLeft, *buttonRight, *buttonZoomIn,
      *buttonZoomOut, *newLine, *listWindow, *mainBox, *buttonClose,
      *newPolygon, *newPoint, *translateButton, *scaleButton, 
      *rotateButton;
     GtkDrawingArea  *drawingArea;
-    GtkTreeSelection *selected;
     GError          *error = NULL;
 
     origin.x = 0;
@@ -578,10 +610,11 @@ int main(int argc, char **argv)
     gtk_init( &argc, &argv );
 
     /* Create new GtkBuilder object */
-    builder = gtk_builder_new();
+    mainBuilder = gtk_builder_new();
+
     /* Load UI from file. If error occurs, report it and quit application.
      * Replace "tut.glade" with your saved project. */
-    if( ! gtk_builder_add_from_file( builder, "interface.glade", &error ) )
+    if( ! gtk_builder_add_from_file( mainBuilder, "interface.glade", &error ) )
     {
         g_warning( "%s", error->message );
         g_free( error );
@@ -589,34 +622,25 @@ int main(int argc, char **argv)
     }
 
     /* Get main window pointer from UI */
-    mainWindow = GTK_WIDGET( gtk_builder_get_object( builder, "mainWindow" ) );
-    viewport = GTK_WIDGET(gtk_builder_get_object(builder, "viewport"));
-    drawingArea = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "drawingarea"));
-    listWindow = GTK_WIDGET(gtk_builder_get_object(builder, "listWindow"));
-    buttonClose = GTK_WIDGET(gtk_builder_get_object(builder, "buttonClose"));
-    mainBox = GTK_WIDGET(gtk_builder_get_object(builder, "mainBox"));
-    buttonUp = GTK_WIDGET(gtk_builder_get_object(builder, "buttonUp"));
-    buttonLeft = GTK_WIDGET(gtk_builder_get_object(builder, "buttonLeft"));
-    buttonRight = GTK_WIDGET(gtk_builder_get_object(builder, "buttonRight"));
-    buttonDown = GTK_WIDGET(gtk_builder_get_object(builder, "buttonDown"));
-    buttonZoomIn = GTK_WIDGET(gtk_builder_get_object(builder, "zoomIn"));
-    buttonZoomOut = GTK_WIDGET(gtk_builder_get_object(builder, "zoomOut"));
-    translateButton = GTK_WIDGET(gtk_builder_get_object(builder, "translateButton"));
-    scaleButton = GTK_WIDGET(gtk_builder_get_object(builder, "scaleButton"));
-    rotateButton = GTK_WIDGET(gtk_builder_get_object(builder, "rotateButton"));
-    newPolygon = GTK_WIDGET(gtk_builder_get_object(builder, "newPolygon"));
-    newLine = GTK_WIDGET(gtk_builder_get_object(builder, "newLine"));
-    newPoint = GTK_WIDGET(gtk_builder_get_object(builder, "newPoint"));
+    mainWindow = GTK_WIDGET( gtk_builder_get_object( mainBuilder, "mainWindow" ) );
+    viewport = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "viewport"));
+    drawingArea = GTK_DRAWING_AREA(gtk_builder_get_object(mainBuilder, "drawingarea"));
+    listWindow = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "listWindow"));
+    buttonClose = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "buttonClose"));
+    mainBox = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "mainBox"));
+    buttonUp = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "buttonUp"));
+    buttonLeft = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "buttonLeft"));
+    buttonRight = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "buttonRight"));
+    buttonDown = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "buttonDown"));
+    buttonZoomIn = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "zoomIn"));
+    buttonZoomOut = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "zoomOut"));
+    translateButton = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "translateButton"));
+    scaleButton = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "scaleButton"));
+    rotateButton = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "rotateButton"));
+    newPolygon = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "newPolygon"));
+    newLine = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "newLine"));
+    newPoint = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "newPoint"));
 
-    displayObjects = create_view_and_model();
-
-    gtk_container_add(GTK_CONTAINER(listWindow), displayObjects);
-    gtk_box_pack_end(GTK_BOX(mainBox), listWindow, (gboolean) TRUE, (gboolean) TRUE, 0);
-    
-    selected = gtk_tree_view_get_selection(GTK_TREE_VIEW(displayObjects));
-    gtk_tree_selection_set_mode(selected, GTK_SELECTION_SINGLE);
-    
-    g_signal_connect(G_OBJECT(selected),"changed", G_CALLBACK(tree_selection_changed), NULL);
     g_signal_connect(mainWindow, "delete_event", G_CALLBACK(exit_app), NULL);
     g_signal_connect(buttonClose, "clicked", G_CALLBACK(exit_app), NULL);
     g_signal_connect(G_OBJECT(drawingArea), "draw", G_CALLBACK(on_draw_event), NULL); 
@@ -633,11 +657,12 @@ int main(int argc, char **argv)
     g_signal_connect(G_OBJECT(newPolygon), "clicked", G_CALLBACK(newPolygonWindow), NULL);
     g_signal_connect(G_OBJECT(newPoint), "clicked", G_CALLBACK(newPointWindow), NULL);
 
+
     /* Connect signals */
-    gtk_builder_connect_signals( builder, NULL );
+    gtk_builder_connect_signals( mainBuilder, NULL );
    
     /* Destroy builder, since we don't need it anymore */
-    g_object_unref( G_OBJECT( builder ) );
+    //g_object_unref( G_OBJECT( mainBuilder ) );
 
     /* Show window. All other widgets are automatically shown by GtkBuilder */
     gtk_widget_show_all( mainWindow );

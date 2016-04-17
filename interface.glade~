@@ -12,6 +12,12 @@
     <property name="step_increment">1</property>
     <property name="page_increment">10</property>
   </object>
+  <object class="GtkListStore" id="listStoreObjects">
+    <columns>
+      <!-- column-name gchararray -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
   <object class="GtkApplicationWindow" id="mainWindow">
     <property name="can_focus">False</property>
     <property name="border_width">6</property>
@@ -57,7 +63,25 @@
                                 <property name="can_focus">True</property>
                                 <property name="shadow_type">in</property>
                                 <child>
-                                  <placeholder/>
+                                  <object class="GtkTreeView" id="objTree">
+                                    <property name="visible">True</property>
+                                    <property name="can_focus">True</property>
+                                    <property name="model">listStoreObjects</property>
+                                    <child internal-child="selection">
+                                      <object class="GtkTreeSelection" id="treeSelection"/>
+                                    </child>
+                                    <child>
+                                      <object class="GtkTreeViewColumn" id="nameCol">
+                                        <property name="title" translatable="yes">Name</property>
+                                        <child>
+                                          <object class="GtkCellRendererText" id="cellrenderertext1"/>
+                                          <attributes>
+                                            <attribute name="text">0</attribute>
+                                          </attributes>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
                                 </child>
                               </object>
                               <packing>
@@ -131,8 +155,8 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkButton" id="button2">
-                                <property name="label" translatable="yes">button</property>
+                              <object class="GtkButton" id="rotateButton">
+                                <property name="label" translatable="yes">Rotate</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
