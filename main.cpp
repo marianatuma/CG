@@ -2,7 +2,6 @@
 #include <cairo.h>
 #include <math.h>
 #include <string>
-#include "line.h"
 #include "viewport.h"
 #include "window.h"
 #include "displayFile.h"
@@ -11,16 +10,19 @@
 #include <iostream>
 
 DisplayFile *displayFile;
-GtkWidget   *displayObjects, *mainWindow;
+GtkWidget   *displayObjects, *mainWindow, *smallerChoice;
 GtkEntry    *xStartInput, *yStartInput, *xEndInput, *yEndInput,
             *newPolyX, *newPolyY, *newPolyName, *newLineName,
             *newPointX, *newPointY, *newPointName, *translateX,
-            *translateY;
+            *translateY, *scaleFactor, *rotationAngle, 
+            *rotationCenterX, *rotationCenterY;
 GraphObj    *selectedObj;
 gchar       *selectedName;        
 Viewport    *viewportData;
 Window      *windowData;
 Polygon     *newPoly;
+
+point origin;
 
 enum {
   COL_X = 0, COL_Y, NUM_COLS
@@ -61,11 +63,6 @@ void drawPoint(cairo_t *cr, GraphObj* g) {
   Point* p = static_cast<Point*>(g);
   drawCircle(cr, p->getPoint(), pointThickness*thicknessIncrement);
   cairo_fill(cr); 
-}
-
-void drawLine(cairo_t *cr, GraphObj* g) {
-  Line* l = static_cast<Line*>(g);
-  connectTwoPoints(cr, l->getStart(), l->getEnd());
 }
 
 void drawPolygon(cairo_t *cr, GraphObj* g) {
@@ -110,9 +107,6 @@ static void do_drawing(cairo_t *cr)
     gtk_list_store_set(liststore, &iter_objects, COL_NAME, g->getName().c_str(), COL_POINTER, g, -1);
 
     switch(t) {
-      case type::LINE:
-        drawLine(cr, g);
-        break;
       case type::POLYGON:
         drawPolygon(cr, g);
         break;
@@ -191,19 +185,20 @@ static gboolean translate(GtkWidget *widget, GdkEventButton *event,
     pivot.y = atof(gtk_entry_get_text(GTK_ENTRY(translateY)));
 
     point center = selectedObj->getCenter();
-    double distance = Utils::distance(pivot, center);
+    point vector = Utils::translationVector(center, pivot);
 
-    /*std::list<point>* points = selectedObj->getPoints();
+    std::list<point>* points = selectedObj->getPoints();
     std::list<point>* translated = new std::list<point>();
     point translatedPoint;
-    distance = Utils::distance(pivot, center);
 
     for (std::list<point>::const_iterator it = points->begin();
     it != points->end();
     ++it) {
-      translatedPoint = Utils::translatePoint(*it, distance);
+      translatedPoint = Utils::translatePoint(*it, vector);
       translated->push_back(translatedPoint);
-    } */
+    } 
+
+    selectedObj->setPoints(translated);
 
     gtk_widget_destroy((GtkWidget*) user_data);
     return TRUE;
@@ -237,6 +232,129 @@ static gboolean translateWindow(GtkWidget *widget, GdkEventButton *event,
   return TRUE;
 }
 
+static gboolean scale(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+  double factor = atof(gtk_entry_get_text(GTK_ENTRY(scaleFactor)));
+
+  if(gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(smallerChoice))){
+    std::cout << "smaller" << "\n";
+    factor = 1/factor;
+  }
+
+  point center = selectedObj->getCenter();
+  point vectorToOrigin = Utils::translationVector(center, origin);
+  point vectorToCenter = Utils::translationVector(origin, center);
+
+  std::list<point>* points = selectedObj->getPoints();
+  std::list<point>* scaled = new std::list<point>();
+  point scaledPoint;
+
+  for (std::list<point>::const_iterator it = points->begin();
+  it != points->end();
+  ++it) {
+    scaledPoint = Utils::scalePoint(*it, factor, vectorToOrigin, vectorToCenter);
+    scaled->push_back(scaledPoint);
+  } 
+
+  selectedObj->setPoints(scaled);
+  gtk_widget_destroy((GtkWidget*) user_data);
+  return TRUE;
+}
+
+static gboolean scaleWindow(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data) {
+  GtkBuilder *builder;
+  GError *error = NULL;
+  
+  builder = gtk_builder_new();
+
+  if (!gtk_builder_add_from_file(builder, "scale.glade", &error)) {
+    g_warning("%s", error->message);
+    g_free(error);
+  }
+
+  GtkWidget *scaleWindow;
+
+  scaleWindow = GTK_WIDGET( gtk_builder_get_object( builder, "scaleWindow" ) );
+  scaleFactor = (GtkEntry*) GTK_WIDGET(gtk_builder_get_object(builder, "scaleFactor"));
+  smallerChoice = GTK_WIDGET( gtk_builder_get_object( builder, "smaller" ));
+  
+  GtkWidget* okButton = GTK_WIDGET(gtk_builder_get_object(builder, "okButton"));
+
+  g_signal_connect(G_OBJECT(okButton), "clicked", G_CALLBACK(scale), scaleWindow);
+  
+  gtk_builder_connect_signals(builder, NULL);
+  g_object_unref(G_OBJECT(builder));
+  gtk_widget_show_all(scaleWindow);
+  gtk_main();
+
+  return TRUE;
+}
+
+static gboolean rotate(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+  double angle = atof(gtk_entry_get_text(GTK_ENTRY(rotationAngle)));
+  point center;
+
+  if(gtk_entry_get_text_length (GTK_ENTRY(rotationCenterX)) == 0 && 
+    gtk_entry_get_text_length (GTK_ENTRY(rotationCenterY)) == 0) {
+    point center = selectedObj->getCenter();
+  } else {
+    center.x = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
+    center.y = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
+  }
+
+  point vectorToOrigin = Utils::translationVector(center, origin);
+  point vectorToCenter = Utils::translationVector(origin, center);
+
+  std::list<point>* points = selectedObj->getPoints();
+  std::list<point>* rotated = new std::list<point>();
+  point rotatedPoint;
+
+  for (std::list<point>::const_iterator it = points->begin();
+  it != points->end();
+  ++it) {
+    rotatedPoint = Utils::rotatePoint(*it, angle, vectorToOrigin, vectorToCenter);
+    rotated->push_back(rotatedPoint);
+  } 
+
+  selectedObj->setPoints(rotated);
+  gtk_widget_destroy((GtkWidget*) user_data);
+  return TRUE;
+}
+
+static gboolean rotateWindow(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data) {
+  GtkBuilder *builder;
+  GError *error = NULL;
+  
+  builder = gtk_builder_new();
+
+  if (!gtk_builder_add_from_file(builder, "rotate.glade", &error)) {
+    g_warning("%s", error->message);
+    g_free(error);
+  }
+
+  GtkWidget *rotateWindow;
+
+  rotateWindow = GTK_WIDGET( gtk_builder_get_object( builder, "rotateWindow" ) );
+  rotationAngle = (GtkEntry*) GTK_WIDGET( gtk_builder_get_object( builder, "rotationAngle" ) );
+  rotationCenterX = (GtkEntry*) GTK_WIDGET( gtk_builder_get_object( builder, "centerX" ) );
+  rotationCenterY = (GtkEntry*) GTK_WIDGET( gtk_builder_get_object( builder, "centerY" ) );
+  GtkWidget* okButton = GTK_WIDGET(gtk_builder_get_object(builder, "okButton"));
+
+  g_signal_connect(G_OBJECT(okButton), "clicked", G_CALLBACK(rotate), rotateWindow);
+  
+  gtk_builder_connect_signals(builder, NULL);
+  g_object_unref(G_OBJECT(builder));
+  gtk_widget_show_all(rotateWindow);
+  gtk_main();
+
+  return TRUE;
+}
+
 static gboolean addNewLine(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
@@ -245,9 +363,9 @@ static gboolean addNewLine(GtkWidget *widget, GdkEventButton *event,
   double endX = atof(gtk_entry_get_text(GTK_ENTRY(xEndInput)));
   double endY = atof(gtk_entry_get_text(GTK_ENTRY(yEndInput)));
 
-  Line* newLine = new Line(gtk_entry_get_text(GTK_ENTRY(newLineName)));
-  newLine->setStart(startX, startY);
-  newLine->setEnd(endX, endY);
+  Polygon* newLine = new Polygon(gtk_entry_get_text(GTK_ENTRY(newLineName)));
+  newLine->addPoint(startX, startY);
+  newLine->addPoint(endX, endY);
 
   displayFile->add(newLine);
   gtk_widget_destroy((GtkWidget*) user_data);
@@ -411,8 +529,10 @@ static void tree_selection_changed(GtkTreeSelection *selection, gpointer data) {
   if(gtk_tree_selection_get_selected(selection, &model, &iter)) {
     gtk_tree_model_get(model, &iter, COL_NAME, &obj, -1);
     selectedName = obj;
-    if(displayFile->getByName((std::string)selectedName) != NULL)
+    if(displayFile->getByName((std::string)selectedName) != NULL){
+      std::cout << selectedName << "\n";
       selectedObj = displayFile->getByName((std::string)selectedName);
+    }
     g_free(obj);
   }
 
@@ -428,24 +548,28 @@ int main(int argc, char **argv)
     GtkWidget       *viewport, *buttonUp,
      *buttonDown,   *buttonLeft, *buttonRight, *buttonZoomIn,
      *buttonZoomOut, *newLine, *listWindow, *mainBox, *buttonClose,
-     *newPolygon, *newPoint, *translateButton;
+     *newPolygon, *newPoint, *translateButton, *scaleButton, 
+     *rotateButton;
     GtkDrawingArea  *drawingArea;
     GtkTreeSelection *selected;
     GError          *error = NULL;
+
+    origin.x = 0;
+    origin.y = 0;
 
     viewportData = new Viewport(300.0, 100.0);
     windowData = new Window(300.0, 100.0);
     
     displayFile = new DisplayFile(); 
     
-    Line* l = new Line("line");
-    l->setStart(10, 10);
-    l->setEnd(50, 100);
+    Polygon* l = new Polygon("line");
+    l->addPoint(10, 10);
+    l->addPoint(50, 100);
     displayFile->add(l);
 
-    l = new Line("line2");
-    l->setStart(5, 5);
-    l->setEnd(500, 15);
+    l = new Polygon("line2");
+    l->addPoint(5, 5);
+    l->addPoint(500, 15);
     displayFile->add(l);
 
 
@@ -478,6 +602,8 @@ int main(int argc, char **argv)
     buttonZoomIn = GTK_WIDGET(gtk_builder_get_object(builder, "zoomIn"));
     buttonZoomOut = GTK_WIDGET(gtk_builder_get_object(builder, "zoomOut"));
     translateButton = GTK_WIDGET(gtk_builder_get_object(builder, "translateButton"));
+    scaleButton = GTK_WIDGET(gtk_builder_get_object(builder, "scaleButton"));
+    rotateButton = GTK_WIDGET(gtk_builder_get_object(builder, "rotateButton"));
     newPolygon = GTK_WIDGET(gtk_builder_get_object(builder, "newPolygon"));
     newLine = GTK_WIDGET(gtk_builder_get_object(builder, "newLine"));
     newPoint = GTK_WIDGET(gtk_builder_get_object(builder, "newPoint"));
@@ -501,6 +627,8 @@ int main(int argc, char **argv)
     g_signal_connect(G_OBJECT(buttonZoomIn), "clicked", G_CALLBACK(zoomIn), mainWindow);
     g_signal_connect(G_OBJECT(buttonZoomOut), "clicked", G_CALLBACK(zoomOut), mainWindow);
     g_signal_connect(G_OBJECT(translateButton), "clicked", G_CALLBACK(translateWindow), mainWindow);
+    g_signal_connect(G_OBJECT(rotateButton), "clicked", G_CALLBACK(rotateWindow), mainWindow);
+    g_signal_connect(G_OBJECT(scaleButton), "clicked", G_CALLBACK(scaleWindow), mainWindow);
     g_signal_connect(G_OBJECT(newLine), "clicked", G_CALLBACK(newLineWindow), NULL);
     g_signal_connect(G_OBJECT(newPolygon), "clicked", G_CALLBACK(newPolygonWindow), NULL);
     g_signal_connect(G_OBJECT(newPoint), "clicked", G_CALLBACK(newPointWindow), NULL);

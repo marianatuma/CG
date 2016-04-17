@@ -5,9 +5,6 @@
 #include <list>
 
 class Polygon : public GraphObj {
-private:
-	std::list<point>* points;
-
 public:
 	Polygon(std::string name, type t = type::POLYGON) : GraphObj(name, t) {
 		points = new std::list<point>();

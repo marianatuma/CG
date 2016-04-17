@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.19.0 -->
+<!-- Generated with glade 3.20.0 -->
 <interface>
   <requires lib="gtk+" version="3.16"/>
   <object class="GtkAdjustment" id="adjustment1">
@@ -118,8 +118,8 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkButton" id="button1">
-                                <property name="label" translatable="yes">button</property>
+                              <object class="GtkButton" id="scaleButton">
+                                <property name="label" translatable="yes">Scale</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>

@@ -20,7 +20,6 @@ GraphObj* DisplayFile::getByName(std::string name) {
     ++it) {
 		g = *it;
 		if(g->getName().compare(name) == 0) {
-			std::cout << "encontrado" << "\n";
 			return g;
 		}
 	}
