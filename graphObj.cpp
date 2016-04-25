@@ -2,7 +2,7 @@
 
 GraphObj::GraphObj(std::string name, type t) {
 	this->t = t;
-	this->name = name;	
+	this->name = name;
 }
 
 type GraphObj::getType() {
@@ -19,4 +19,8 @@ void GraphObj::changeName(std::string newName) {
 
 void GraphObj::setPoints(std::list<point>* newPoints){
 	this->points = newPoints;
+}
+
+void GraphObj::setClippedPoints(std::list<point>* clipped) {
+	clippedPoints = clipped;
 }

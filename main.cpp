@@ -7,6 +7,7 @@
 #include "displayFile.h"
 #include "polygon.h"
 #include "point.h"
+#include "cohenSutherland.h"
 #include <iostream>
 
 DisplayFile *displayFile;
@@ -21,6 +22,7 @@ GraphObj    *selectedObj;
 Viewport    *viewportData;
 Window      *windowData;
 Polygon     *newPoly;
+CohenSutherland *cs;
 
 point origin;
 
@@ -67,7 +69,8 @@ void drawPoint(cairo_t *cr, GraphObj* g) {
 
 void drawPolygon(cairo_t *cr, GraphObj* g) {
   Polygon* p = static_cast<Polygon*>(g);
-  std::list<point>* points = p->getPoints();
+  cs->clip(p);
+  std::list<point>* points = p->getClippedPoints();
   point first = points->front();
   point tempStart, tempEnd;
 
@@ -589,8 +592,9 @@ int main(int argc, char **argv)
     origin.x = 0;
     origin.y = 0;
 
-    viewportData = new Viewport(300.0, 100.0);
-    windowData = new Window(300.0, 100.0);
+    viewportData = new Viewport(300.0, 350.0);
+    windowData = new Window(300.0, 350.0);
+    cs = new CohenSutherland(windowData);
     
     displayFile = new DisplayFile(); 
     

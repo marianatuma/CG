@@ -12,7 +12,12 @@ enum class type {
 
 struct point {
 	double x;
-	double y;	
+	double y;
+	point(){}
+	point(double x1, double y1) {
+		x = x1;
+		y = y1;
+	}	
 };
 
 class Utils {

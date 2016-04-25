@@ -11,6 +11,10 @@ std::list<point>* Polygon::getPoints() {
 	return points;
 }
 
+std::list<point>* Polygon::getClippedPoints() {
+	return clippedPoints;
+}
+
 point Polygon::getCenter() {
 	double sumX, sumY = 0;
 	point center;

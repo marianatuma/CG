@@ -12,6 +12,7 @@ private:
 
 protected:
 	std::list<point>* points;
+	std::list<point>* clippedPoints;
 
 public:
 	GraphObj(std::string name, type t);
@@ -21,6 +22,7 @@ public:
 	virtual std::list<point>* getPoints() = 0;
 	virtual point getCenter() = 0;
 	void setPoints(std::list<point>* newPoints);
+	void setClippedPoints(std::list<point>* clipped);
 };
 
 #endif
