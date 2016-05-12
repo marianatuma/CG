@@ -1,11 +1,95 @@
 #include "cohenSutherland.h"
-#include <vector>
 #include <iterator>
 
 CohenSutherland::CohenSutherland(Window* window) {
 	this->window = window;
 }
 
+bool CohenSutherland::needsClipping(std::list<point>* points) {
+	point a, b;
+	a = points->back();
+	
+	for (std::list<point>::const_iterator it = points->begin();
+    it != points->end();
+    ++it) {
+		b = a;
+		a = *it;
+		if((getQuadrant(a) & getQuadrant(b)) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+void CohenSutherland::clipPolygon(GraphObj* g){
+	std::list<point>* points = g->getPoints();
+	
+	if(needsClipping(points)) {
+		std::list<point>* clipped = new std::list<point>();
+		
+		for (std::list<point>::const_iterator it = points->begin();
+    	it != points->end();
+    	++it) {
+    		// copia, necessario??
+    		clipped->push_back(*it);
+		}
+
+		std::list<point> temp;
+		point a, b, c;
+		a = clipped->back();
+
+		//Cortando por borda
+		for (int edge = 1; edge <= 8; edge *= 2) {
+			temp.clear();
+
+			for (std::list<point>::const_iterator it = clipped->begin();
+	    	it != clipped->end();
+	    	++it) {
+	    		b = a;
+				a = *it;
+
+				if ((getQuadrant(a) & edge) == 0) {
+					// a esta dentro da area de clipping
+					temp.push_back(a);
+					if ((getQuadrant(b) & edge) == 0) {
+						temp.push_back(b);
+					} else {
+						c = calculateIntersection(a, b, edge);
+						temp.push_back(c);
+					}
+				} else if ((getQuadrant(b) & edge) == 0) {
+					// a esta fodra da area de cliping mas b esta dentro
+					c = calculateIntersection(a, b, edge);
+					temp.push_back(c);
+					temp.push_back(b);
+				}
+
+			}
+
+			clipped->clear();
+			for (std::list<point>::const_iterator it = temp.begin();
+	    	it != temp.end();
+	    	++it) {
+				clipped->push_back(*it);
+			}
+		}
+		g->setClippedPoints(clipped);
+	} else {
+	//	g->setClippedPoints(points);
+	} 
+}
+
+void CohenSutherland::clipPoint(GraphObj* g) {
+	Point* p = static_cast<Point*>(g);
+	point* o = p->getPoint();
+	bool draw = false;
+	
+	if (this->getQuadrant(*o) == CohenSutherland::INSIDE) {
+		draw = true;;
+	}
+
+	p->setDraw(draw);
+}
 
 void CohenSutherland::clip(GraphObj* g) {
 	type t = g->getType();
@@ -19,76 +103,119 @@ void CohenSutherland::clip(GraphObj* g) {
     }
 }
 
-void CohenSutherland::clipPolygon(GraphObj* g){
-	std::list<point>* points = g->getPoints();
-	std::list<point>* clipped = new std::list<point>();
-	point w[] = {point(window->getXMin(), window->getYMin()), 
-		point(window->getXMax(), window->getYMin()), 
-		point(window->getXMax(), window->getYMax()), 
-		point(window->getXMin(), window->getYMax())};
+CohenSutherland::Quadrant CohenSutherland::getQuadrant(
+		point p) {
+	int quadrant = 0;
 
-	for (std::list<point>::const_iterator it = points->begin();
-    it != points->end(); ++it) {
-		clipped->push_back(*it);
+	if (p.x < window->getXMin()) {
+		quadrant += CohenSutherland::LEFT;
+	} else if (p.x > window->getXMax()) {
+		quadrant += CohenSutherland::RIGHT;
 	}
 
-	int len = 4;
-	for (int i = 0; i < len; i++) {
-		int size = clipped->size();
-		
-		std::vector<point> input;
-		for (std::list<point>::const_iterator it = clipped->begin();
-		    it != clipped->end(); ++it) {
-			input.push_back(*it);
+	if (p.y < window->getYMin()) {
+		quadrant += CohenSutherland::DOWN;
+	} else if (p.y > window->getYMax()) {
+		quadrant += CohenSutherland::UP;
+	}
+	return (CohenSutherland::Quadrant) quadrant;
+}
+
+point CohenSutherland::calculateIntersection(point a, point b, int edge) {
+	double m = (b.y - a.y) / (b.x - a.x);
+	return clipSector(a, m, (CohenSutherland::Quadrant) edge);
+}
+
+point CohenSutherland::clipSector(point p, double m, CohenSutherland::Quadrant quadrant) {
+	switch (quadrant) {
+	case CohenSutherland::INSIDE:
+		break;
+	case CohenSutherland::LEFT:
+		if (m != 0.0) {
+			p.y = m * (window->getXMin() - p.x) + p.y;
+			p.x =  window->getXMin();
 		}
+		break;
+	case CohenSutherland::RIGHT:
+		if (m != 0.0) {
+			p.y = m * (window->getXMax() - p.x) + p.y;
+			p.x = window->getXMax();
+		}
+		break;
+	case CohenSutherland::UP:
+		if (m != 0.0) {
+			p.x = p.x + ((1 / m) * (window->getYMax() - p.y));
+			p.y = window->getYMax();
+		}
+		break;
+	case CohenSutherland::DOWN:
+		if (m != 0.0) {
+			p.x = p.x + ((1 / m) * (window->getYMin() - p.y));
+			p.y = window->getYMin();
+		}
+		break;
+	case CohenSutherland::UP_LEFT:
 
-		clipped = new std::list<point>();
-
-		point a = w[(i + len - 1) % len];
-		point b = w[i];
-
-		for (int j = 0; j < size; j++) {
-
-			point p = input[(j + size - 1) % size];
-			point q = input[j];
-
-			if (isInside(a, b, q)) {
-				if (!isInside(a, b, p)) {
-					clipped->push_back(intersection(a, b, p, q));
-				}
-				clipped->push_back(q);
-			} else if (isInside(a, b, p)) {
-				clipped->push_back(intersection(a, b, p, q));
+		if (m != 0.0) {
+			double  tempY = (m * (window->getXMin() - p.x)) + p.y;
+			point tempInt(window->getXMin(), tempY);
+			if (getQuadrant(tempInt) != CohenSutherland::INSIDE) {
+				p.x = (p.x + ((1 / m) * (window->getYMax() - p.y)));
+				p.y = window->getYMax();
+			} else {
+				p.x = window->getXMin();
+				p.y = tempY;
 			}
 		}
+
+		break;
+
+	case CohenSutherland::UP_RIGHT:
+		if (m != 0.0) {
+			double tempY = (m * (window->getXMax() - p.x)) + p.y;
+			point tempInt = point(window->getXMax(), tempY);
+			if (getQuadrant(tempInt) != CohenSutherland::INSIDE) {
+				p.x = (p.x + ((1 / m) * (window->getYMax() - p.y)));
+				p.y = window->getYMax();
+			} else {
+				p.x = window->getXMax();
+				p.y = tempY;
+			}
+		}
+
+		break;
+
+	case CohenSutherland::DOWN_LEFT:
+
+		if (m != 0.0) {
+			double tempY = (m * (window->getXMin() - p.x)) + p.y;
+			point tempInt = point(window->getXMin(), tempY);
+			if (getQuadrant(tempInt) != CohenSutherland::INSIDE) {
+				p.x = (p.x + ((1 / m) * (window->getYMin() - p.y)));
+				p.y = window->getYMin();
+			} else {
+				p.x = window->getXMin();
+				p.y = tempY;
+			}
+		}
+
+		break;
+
+	case CohenSutherland::DOWN_RIGHT:
+
+		if (m != 0.0) {
+			double tempY = (m * (window->getXMax() - p.x)) + p.y;
+			point tempInt = point(window->getXMax(), tempY);
+			if (getQuadrant(tempInt) != CohenSutherland::INSIDE) {
+				p.x = (p.x + ((1 / m) * (window->getYMin() - p.y)));
+				p.y = window->getYMin();
+			} else {
+				p.x = window->getXMax();
+				p.y = tempY;
+			}
+		}
+
+		break;
 	}
-
-	g->setClippedPoints(clipped);
+	return p;
 }
-
-bool CohenSutherland::isInside(point a, point b, point c) {
-	return (a.x - c.x) * (b.y - c.y) > (a.y - c.y) * (b.x - c.x);
-}
-
-point CohenSutherland::intersection(point a, point b, point p,
-		point q) {
-	point res;
-	double A1 = b.y - a.y;
-	double B1 = a.x - b.x;
-	double C1 = A1 * a.x + B1 * a.y;
-
-	double A2 = q.y - p.y;
-	double B2 = p.x - q.x;
-	double C2 = A2 * p.x + B2 * p.y;
-
-	double det = A1 * B2 - A2 * B1;
-	res.x = (B2 * C1 - B1 * C2) / det;
-	res.y = (A1 * C2 - A2 * C1) / det;
-
-	return res;
-}
-
-Point* CohenSutherland::clipPoint(GraphObj* g){
-
-}
-

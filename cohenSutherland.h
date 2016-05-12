@@ -1,22 +1,37 @@
-#ifndef COHENSUTHERLAND_HPP
-#define COHENSUTHERLAND_HPP
+#ifndef COHENSUTHERLAND_H
+#define COHENSUTHERLAND_H
 
-#include "graphObj.h"
 #include "window.h"
-#include "polygon.h"
 #include "point.h"
 
 class CohenSutherland {
-public:
-	CohenSutherland (Window* w);
-	void clip(GraphObj* g);
+protected:
+	enum Quadrant {
+		INSIDE = 0x0,
+		LEFT = 0x1,
+		RIGHT = 0x2,
+		DOWN = 0x4,
+		UP = 0x8,
+		UP_LEFT = UP | LEFT,
+		UP_RIGHT = UP | RIGHT,
+		DOWN_LEFT = DOWN | LEFT,
+		DOWN_RIGHT = DOWN | RIGHT
+	};
 
 private:
-	Window *window;
-	void clipPolygon(GraphObj*);
-	Point* clipPoint(GraphObj*);
-	bool isInside(point a, point b, point c);
-	point intersection(point a, point b, point p, point q);
+	Window* window;
+	Quadrant getQuadrant(point p);
+	point calculateIntersection(point a, point b, int edge);
+	double calculateM(point a, point b);
+	point clipSector(point p, double m, CohenSutherland::Quadrant quadrant);
+	void clipPolygon(GraphObj* g);
+	void clipPoint(GraphObj* g);
+	bool needsClipping(std::list<point>* points);
+
+public:
+	CohenSutherland(Window* window);
+	void clip (GraphObj* g);
+
 };
 
 #endif

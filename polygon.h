@@ -10,8 +10,6 @@ public:
 		points = new std::list<point>();
 	};
 	void addPoint(double x, double y);
-	virtual std::list<point>* getPoints();
-	std::list<point>* getClippedPoints();
 	void setClippedPoints(std::list<point>* clipped);
 	virtual point getCenter();
 };

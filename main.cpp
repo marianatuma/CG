@@ -7,6 +7,7 @@
 #include "displayFile.h"
 #include "polygon.h"
 #include "point.h"
+#include "sutherlandHodgeman.h"
 #include "cohenSutherland.h"
 #include <iostream>
 
@@ -22,6 +23,7 @@ GraphObj    *selectedObj;
 Viewport    *viewportData;
 Window      *windowData;
 Polygon     *newPoly;
+SutherlandHodgeman *sh;
 CohenSutherland *cs;
 
 point origin;
@@ -63,28 +65,28 @@ void drawCircle(cairo_t *cr, point *center, double radius) {
 
 void drawPoint(cairo_t *cr, GraphObj* g) {
   Point* p = static_cast<Point*>(g);
-  drawCircle(cr, p->getPoint(), pointThickness*thicknessIncrement);
-  cairo_fill(cr); 
+  cs->clip(p);
+  if(p->getDraw()){
+    drawCircle(cr, p->getPoint(), pointThickness*thicknessIncrement);
+    cairo_fill(cr); 
+  }
 }
 
 void drawPolygon(cairo_t *cr, GraphObj* g) {
   Polygon* p = static_cast<Polygon*>(g);
   cs->clip(p);
   std::list<point>* points = p->getClippedPoints();
-  point first = points->front();
+  
   point tempStart, tempEnd;
+  tempEnd = points->back();
 
   for (std::list<point>::const_iterator it = points->begin();
     it != points->end();
     ++it) {
       tempStart = tempEnd;
       tempEnd = *it; 
-      if(it != points->begin()){
-        connectTwoPoints(cr, &tempStart, &tempEnd);
-      }
+      connectTwoPoints(cr, &tempStart, &tempEnd);
   }
-  //fecha o poligono
-  connectTwoPoints(cr, &tempEnd, &first);
 }
 void clearList() {
   GtkListStore *listStoreObjects = GTK_LIST_STORE(
@@ -230,22 +232,9 @@ static gboolean translate(GtkWidget *widget, GdkEventButton *event,
     pivot.x = atof(gtk_entry_get_text(GTK_ENTRY(translateX)));
     pivot.y = atof(gtk_entry_get_text(GTK_ENTRY(translateY)));
 
-    point center = selectedObj->getCenter();
-    point vector = Utils::translationVector(center, pivot);
-
-    std::list<point>* points = selectedObj->getPoints();
-    std::list<point>* translated = new std::list<point>();
-    point translatedPoint;
-
-    for (std::list<point>::const_iterator it = points->begin();
-    it != points->end();
-    ++it) {
-      translatedPoint = Utils::translatePoint(*it, vector);
-      translated->push_back(translatedPoint);
-    } 
-
-    selectedObj->setPoints(translated);
-
+    double transMatrix [4][4];
+    Utils::translationMatrix(pivot.x, pivot.y, 0, transMatrix);
+    selectedObj->transform(transMatrix);
     gtk_widget_destroy((GtkWidget*) user_data);
     return TRUE;
 }
@@ -284,29 +273,16 @@ static gboolean translateWindow(GtkWidget *widget, GdkEventButton *event,
 static gboolean scale(GtkWidget *widget, GdkEventButton *event,
     gpointer user_data)
 {
+  point center = selectedObj->getCenter();
   double factor = atof(gtk_entry_get_text(GTK_ENTRY(scaleFactor)));
 
   if(gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(smallerChoice))){
-    std::cout << "smaller" << "\n";
     factor = 1/factor;
   }
 
-  point center = selectedObj->getCenter();
-  point vectorToOrigin = Utils::translationVector(center, origin);
-  point vectorToCenter = Utils::translationVector(origin, center);
-
-  std::list<point>* points = selectedObj->getPoints();
-  std::list<point>* scaled = new std::list<point>();
-  point scaledPoint;
-
-  for (std::list<point>::const_iterator it = points->begin();
-  it != points->end();
-  ++it) {
-    scaledPoint = Utils::scalePoint(*it, factor, vectorToOrigin, vectorToCenter);
-    scaled->push_back(scaledPoint);
-  } 
-
-  selectedObj->setPoints(scaled);
+  double sMatrix[4][4];
+  Utils::scalingMatrix(center.x, center.y, factor, sMatrix);
+  selectedObj->transform(sMatrix);
   gtk_widget_destroy((GtkWidget*) user_data);
   return TRUE;
 }
@@ -348,31 +324,19 @@ static gboolean rotate(GtkWidget *widget, GdkEventButton *event,
 {
   double angle = atof(gtk_entry_get_text(GTK_ENTRY(rotationAngle)));
 
-  point center;
+  point rotationCenter;
 
   if(gtk_entry_get_text_length (GTK_ENTRY(rotationCenterX)) == 0 && 
     gtk_entry_get_text_length (GTK_ENTRY(rotationCenterY)) == 0) {
-    center = selectedObj->getCenter();
+    rotationCenter = selectedObj->getCenter();
   } else {
-    center.x = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
-    center.y = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
+    rotationCenter.x = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
+    rotationCenter.y = atof(gtk_entry_get_text(GTK_ENTRY(rotationCenterX)));
   }
 
-  point vectorToOrigin = Utils::translationVector(center, origin);
-  point vectorToCenter = Utils::translationVector(origin, center);
-
-  std::list<point>* points = selectedObj->getPoints();
-  std::list<point>* rotated = new std::list<point>();
-  point rotatedPoint;
-
-  for (std::list<point>::const_iterator it = points->begin();
-  it != points->end();
-  ++it) {
-    rotatedPoint = Utils::rotatePoint(*it, angle, vectorToOrigin, vectorToCenter);
-    rotated->push_back(rotatedPoint);
-  } 
-
-  selectedObj->setPoints(rotated);
+  double rMatrix[4][4];
+  Utils::rotationMatrix(rotationCenter, angle, rMatrix);
+  selectedObj->transform(rMatrix);
   gtk_widget_destroy((GtkWidget*) user_data);
   return TRUE;
 }
@@ -594,6 +558,7 @@ int main(int argc, char **argv)
 
     viewportData = new Viewport(300.0, 350.0);
     windowData = new Window(300.0, 350.0);
+    sh = new SutherlandHodgeman(windowData);
     cs = new CohenSutherland(windowData);
     
     displayFile = new DisplayFile(); 
@@ -628,7 +593,7 @@ int main(int argc, char **argv)
     /* Get main window pointer from UI */
     mainWindow = GTK_WIDGET( gtk_builder_get_object( mainBuilder, "mainWindow" ) );
     viewport = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "viewport"));
-    drawingArea = GTK_DRAWING_AREA(gtk_builder_get_object(mainBuilder, "drawingarea"));
+    drawingArea = GTK_DRAWING_AREA(gtk_builder_get_object(mainBuilder, "drawingArea"));
     listWindow = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "listWindow"));
     buttonClose = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "buttonClose"));
     mainBox = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "mainBox"));

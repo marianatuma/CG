@@ -19,10 +19,12 @@ public:
 	type getType();
 	std::string getName();
 	void changeName(std::string newName);
-	virtual std::list<point>* getPoints() = 0;
+	std::list<point>* getPoints();
+	std::list<point>* getClippedPoints();
 	virtual point getCenter() = 0;
 	void setPoints(std::list<point>* newPoints);
 	void setClippedPoints(std::list<point>* clipped);
+	void transform(double matrix[4][4]);
 };
 
 #endif
