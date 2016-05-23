@@ -1,10 +1,10 @@
 #ifndef COHENSUTHERLAND_H
 #define COHENSUTHERLAND_H
 
-#include "window.h"
 #include "point.h"
+#include "clipping.h"
 
-class CohenSutherland {
+class CohenSutherland : public Clipping{
 protected:
 	enum Quadrant {
 		INSIDE = 0x0,
@@ -19,7 +19,6 @@ protected:
 	};
 
 private:
-	Window* window;
 	Quadrant getQuadrant(point p);
 	point calculateIntersection(point a, point b, int edge);
 	double calculateM(point a, point b);
@@ -29,9 +28,8 @@ private:
 	bool needsClipping(std::list<point>* points);
 
 public:
-	CohenSutherland(Window* window);
-	void clip (GraphObj* g);
-
+	CohenSutherland(Window* window) : Clipping(window){}
+	virtual void clip (GraphObj* g);
 };
 
 #endif

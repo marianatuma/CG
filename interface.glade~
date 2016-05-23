@@ -534,8 +534,8 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
-                            <property name="active">True</property>
                             <property name="draw_indicator">True</property>
+                            <property name="group">noClipping</property>
                           </object>
                           <packing>
                             <property name="expand">True</property>
@@ -549,8 +549,8 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
-                            <property name="active">True</property>
                             <property name="draw_indicator">True</property>
+                            <property name="group">noClipping</property>
                           </object>
                           <packing>
                             <property name="expand">True</property>
@@ -559,7 +559,7 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkRadioButton">
+                          <object class="GtkRadioButton" id="noClipping">
                             <property name="label" translatable="yes">None</property>
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>

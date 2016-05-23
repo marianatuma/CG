@@ -2,11 +2,6 @@
 #include <vector>
 #include <iterator>
 
-SutherlandHodgeman::SutherlandHodgeman(Window* window) {
-	this->window = window;
-}
-
-
 void SutherlandHodgeman::clip(GraphObj* g) {
 	point w[] = {point(window->getXMin(), window->getYMin()), 
 		point(window->getXMax(), window->getYMin()), 

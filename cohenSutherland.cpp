@@ -1,10 +1,6 @@
 #include "cohenSutherland.h"
 #include <iterator>
 
-CohenSutherland::CohenSutherland(Window* window) {
-	this->window = window;
-}
-
 bool CohenSutherland::needsClipping(std::list<point>* points) {
 	point a, b;
 	a = points->back();
@@ -17,7 +13,6 @@ bool CohenSutherland::needsClipping(std::list<point>* points) {
 		if((getQuadrant(a) & getQuadrant(b)) == 0)
 			return true;
 	}
-
 	return false;
 }
 
@@ -37,6 +32,7 @@ void CohenSutherland::clipPolygon(GraphObj* g){
 		std::list<point> temp;
 		point a, b, c;
 		a = clipped->back();
+		bool containsFromPrevious = false;
 
 		//Cortando por borda
 		for (int edge = 1; edge <= 8; edge *= 2) {
@@ -50,7 +46,6 @@ void CohenSutherland::clipPolygon(GraphObj* g){
 
 				if ((getQuadrant(a) & edge) == 0) {
 					// a esta dentro da area de clipping
-					temp.push_back(a);
 					if ((getQuadrant(b) & edge) == 0) {
 						temp.push_back(b);
 					} else {
@@ -65,7 +60,7 @@ void CohenSutherland::clipPolygon(GraphObj* g){
 				}
 
 			}
-
+			
 			clipped->clear();
 			for (std::list<point>::const_iterator it = temp.begin();
 	    	it != temp.end();

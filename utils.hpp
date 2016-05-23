@@ -124,6 +124,15 @@ public:
 		return q;
 	}
 
+	static double angle(point a, point b) {
+		double sizeA = sqrt(pow(a.x, 2) + pow(a.y, 2));
+		double sizeB = sqrt(pow(b.x, 2) + pow(b.y, 2));
+		double dot = (a.x * b.x) + (a.y * b.y);
+		double radians = acos( dot / (sizeA * sizeB));
+
+		return radians/PI*180.0;
+	}
+
 };
 
 #endif

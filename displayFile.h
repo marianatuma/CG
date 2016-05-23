@@ -4,6 +4,7 @@
 #include <list>
 #include <string>
 #include "graphObj.h"
+#include "utils.hpp"
 
 class DisplayFile {
 private:
@@ -14,6 +15,7 @@ public:
 	void remove(GraphObj *g);
 	std::list<GraphObj*>* getObjects();
 	GraphObj* getByName(std::string name);
+	void rotateAll(double angle, point center);
 };
 
 #endif

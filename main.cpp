@@ -9,11 +9,13 @@
 #include "point.h"
 #include "sutherlandHodgeman.h"
 #include "cohenSutherland.h"
+#include "noClipping.h"
 #include <iostream>
 
 DisplayFile *displayFile;
 GtkBuilder  *mainBuilder;
-GtkWidget   *mainWindow, *smallerChoice;
+GtkWidget   *mainWindow, *smallerChoice, *cohenButton, *sutherlandButton,
+            *noClippingButton;
 GtkEntry    *xStartInput, *yStartInput, *xEndInput, *yEndInput,
             *newPolyX, *newPolyY, *newPolyName, *newLineName,
             *newPointX, *newPointY, *newPointName, *translateX,
@@ -23,8 +25,11 @@ GraphObj    *selectedObj;
 Viewport    *viewportData;
 Window      *windowData;
 Polygon     *newPoly;
-SutherlandHodgeman *sh;
-CohenSutherland *cs;
+
+Clipping* clipper;
+CohenSutherland* cs;
+SutherlandHodgeman* sh;
+NoClipping* nc;
 
 point origin;
 
@@ -65,7 +70,7 @@ void drawCircle(cairo_t *cr, point *center, double radius) {
 
 void drawPoint(cairo_t *cr, GraphObj* g) {
   Point* p = static_cast<Point*>(g);
-  cs->clip(p);
+  clipper->clip(p);
   if(p->getDraw()){
     drawCircle(cr, p->getPoint(), pointThickness*thicknessIncrement);
     cairo_fill(cr); 
@@ -74,7 +79,7 @@ void drawPoint(cairo_t *cr, GraphObj* g) {
 
 void drawPolygon(cairo_t *cr, GraphObj* g) {
   Polygon* p = static_cast<Polygon*>(g);
-  cs->clip(p);
+  clipper->clip(p);
   std::list<point>* points = p->getClippedPoints();
   
   point tempStart, tempEnd;
@@ -194,6 +199,20 @@ static gboolean zoomOut(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
+static gboolean changeClipping(GtkWidget *widget, GdkEventButton *event,
+  gpointer user_data)
+{
+  if(gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(cohenButton))){
+    clipper = cs;
+  } else if(gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(sutherlandButton))){
+    clipper = sh;
+  } else {
+    clipper = nc;
+  }
+
+  //gtk_widget_queue_draw((GtkWidget*) user_data);
+  return TRUE;    
+}
 
 static GraphObj* getSelected() {
   GtkTreeSelection *selection = gtk_tree_view_get_selection(
@@ -385,6 +404,11 @@ static gboolean addNewLine(GtkWidget *widget, GdkEventButton *event,
   newLine->addPoint(startX, startY);
   newLine->addPoint(endX, endY);
 
+  double matrix [4][4];
+  Utils::rotationMatrix(origin, windowData->getAngle(), matrix);
+  
+  newLine->transformOnWindowRotation(matrix);
+
   displayFile->add(newLine);
   gtk_widget_destroy((GtkWidget*) user_data);
 
@@ -420,6 +444,12 @@ static gboolean closeNewPoly(GtkWidget *widget, GdkEventButton *event,
 {
   //.c_str()
   newPoly->changeName(gtk_entry_get_text(GTK_ENTRY(newPolyName)));
+  
+  double matrix [4][4];
+  Utils::rotationMatrix(windowData->getCenter(), windowData->getAngle(), matrix);
+  
+  newPoly->transformOnWindowRotation(matrix);
+
   displayFile->add(newPoly);
   gtk_widget_destroy((GtkWidget*) user_data);
 }
@@ -539,6 +569,46 @@ static GtkWidget* create_view_and_model() {
   return view;
 }
 
+static gboolean rotateW(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data)
+{
+  double angle = atof(gtk_entry_get_text(GTK_ENTRY(rotationAngle)));
+  windowData->rotate(angle);
+
+  displayFile->rotateAll(windowData->getAngle(), windowData->getCenter());
+
+  gtk_widget_destroy((GtkWidget*) user_data);
+  return TRUE;
+}
+
+static gboolean rotateWindowWindow(GtkWidget *widget, GdkEventButton *event,
+    gpointer user_data) {
+  GtkBuilder *builder;
+  GError *error = NULL;
+  
+  builder = gtk_builder_new();
+
+  if (!gtk_builder_add_from_file(builder, "rotateWindow.glade", &error)) {
+    g_warning("%s", error->message);
+    g_free(error);
+  }
+
+  GtkWidget *rotateWindowWindow;
+
+  rotateWindowWindow = GTK_WIDGET( gtk_builder_get_object( builder, "rotateWindowWindow" ) );
+  rotationAngle = (GtkEntry*) GTK_WIDGET( gtk_builder_get_object( builder, "rotationAngle" ) );
+  GtkWidget* okButton = GTK_WIDGET(gtk_builder_get_object(builder, "okButton"));
+
+  g_signal_connect(G_OBJECT(okButton), "clicked", G_CALLBACK(rotateW), rotateWindowWindow);
+  
+  gtk_builder_connect_signals(builder, NULL);
+  g_object_unref(G_OBJECT(builder));
+  gtk_widget_show_all(rotateWindowWindow);
+  gtk_main();
+
+  return TRUE;
+}
+
 static void exit_app(GtkWidget* widget, gpointer data) {
   gtk_main_quit();
 }
@@ -549,7 +619,7 @@ int main(int argc, char **argv)
      *buttonDown,   *buttonLeft, *buttonRight, *buttonZoomIn,
      *buttonZoomOut, *newLine, *listWindow, *mainBox, *buttonClose,
      *newPolygon, *newPoint, *translateButton, *scaleButton, 
-     *rotateButton;
+     *rotateButton, *rotateWindowButton;
     GtkDrawingArea  *drawingArea;
     GError          *error = NULL;
 
@@ -560,19 +630,20 @@ int main(int argc, char **argv)
     windowData = new Window(300.0, 350.0);
     sh = new SutherlandHodgeman(windowData);
     cs = new CohenSutherland(windowData);
+    nc = new NoClipping(windowData);
+    clipper = nc;
     
     displayFile = new DisplayFile(); 
     
     Polygon* l = new Polygon("line");
-    l->addPoint(10, 10);
-    l->addPoint(50, 100);
+    l->addPoint(0, 0);
+    l->addPoint(100, 100);
     displayFile->add(l);
 
-    l = new Polygon("line2");
-    l->addPoint(5, 5);
-    l->addPoint(500, 15);
-    displayFile->add(l);
-
+    //l = new Polygon("line2");
+    //l->addPoint(5, 5);
+    //l->addPoint(500, 15);
+    //displayFile->add(l);
 
     /* Init GTK+ */
 
@@ -609,6 +680,10 @@ int main(int argc, char **argv)
     newPolygon = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "newPolygon"));
     newLine = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "newLine"));
     newPoint = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "newPoint"));
+    cohenButton = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "cohenButton"));
+    sutherlandButton = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "hodgemanButton"));
+    noClippingButton = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "noClipping"));
+    rotateWindowButton = GTK_WIDGET(gtk_builder_get_object(mainBuilder, "rotateWindow"));
 
     g_signal_connect(mainWindow, "delete_event", G_CALLBACK(exit_app), NULL);
     g_signal_connect(buttonClose, "clicked", G_CALLBACK(exit_app), NULL);
@@ -625,8 +700,10 @@ int main(int argc, char **argv)
     g_signal_connect(G_OBJECT(newLine), "clicked", G_CALLBACK(newLineWindow), NULL);
     g_signal_connect(G_OBJECT(newPolygon), "clicked", G_CALLBACK(newPolygonWindow), NULL);
     g_signal_connect(G_OBJECT(newPoint), "clicked", G_CALLBACK(newPointWindow), NULL);
-
-
+    g_signal_connect(G_OBJECT(cohenButton), "clicked", G_CALLBACK(changeClipping), mainWindow);
+    g_signal_connect(G_OBJECT(sutherlandButton), "clicked", G_CALLBACK(changeClipping), mainWindow);
+    g_signal_connect(G_OBJECT(noClippingButton), "clicked", G_CALLBACK(changeClipping), mainWindow);
+    g_signal_connect(G_OBJECT(rotateWindowButton), "clicked", G_CALLBACK(rotateWindowWindow), mainWindow);
     /* Connect signals */
     gtk_builder_connect_signals( mainBuilder, NULL );
    

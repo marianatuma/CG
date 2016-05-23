@@ -6,9 +6,7 @@
 
 class Polygon : public GraphObj {
 public:
-	Polygon(std::string name, type t = type::POLYGON) : GraphObj(name, t) {
-		points = new std::list<point>();
-	};
+	Polygon(std::string name, type t = type::POLYGON) : GraphObj(name, t) {};
 	void addPoint(double x, double y);
 	void setClippedPoints(std::list<point>* clipped);
 	virtual point getCenter();

@@ -325,7 +325,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkGrid">
+          <object class="GtkGrid" id="1000">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <child>
@@ -493,7 +493,16 @@
                   </packing>
                 </child>
                 <child>
-                  <placeholder/>
+                  <object class="GtkButton" id="rotateWindow">
+                    <property name="label" translatable="yes">Rotate</property>
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="receives_default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">2</property>
+                    <property name="top_attach">2</property>
+                  </packing>
                 </child>
                 <child>
                   <placeholder/>
@@ -511,19 +520,19 @@
               </packing>
             </child>
             <child>
-              <object class="GtkFrame">
+              <object class="GtkFrame" id="1001">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="border_width">6</property>
                 <property name="label_xalign">0</property>
                 <property name="shadow_type">out</property>
                 <child>
-                  <object class="GtkAlignment">
+                  <object class="GtkAlignment" id="1002">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="left_padding">12</property>
                     <child>
-                      <object class="GtkButtonBox">
+                      <object class="GtkButtonBox" id="1003">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="orientation">vertical</property>
@@ -534,8 +543,8 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
-                            <property name="active">True</property>
                             <property name="draw_indicator">True</property>
+                            <property name="group">noClipping</property>
                           </object>
                           <packing>
                             <property name="expand">True</property>
@@ -549,9 +558,8 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
-                            <property name="active">True</property>
                             <property name="draw_indicator">True</property>
-                            <property name="group">hodgemanButton</property>
+                            <property name="group">noClipping</property>
                           </object>
                           <packing>
                             <property name="expand">True</property>
@@ -560,14 +568,13 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkRadioButton">
+                          <object class="GtkRadioButton" id="noClipping">
                             <property name="label" translatable="yes">None</property>
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
                             <property name="active">True</property>
                             <property name="draw_indicator">True</property>
-                            <property name="group">hodgemanButton</property>
                           </object>
                           <packing>
                             <property name="expand">True</property>
@@ -580,7 +587,7 @@
                   </object>
                 </child>
                 <child type="label">
-                  <object class="GtkLabel">
+                  <object class="GtkLabel" id="1004">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="label" translatable="yes">Clipping</property>

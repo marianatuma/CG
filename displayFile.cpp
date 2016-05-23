@@ -30,3 +30,20 @@ GraphObj* DisplayFile::getByName(std::string name) {
 void DisplayFile::remove(GraphObj *g) {
 	objectList->remove(g);
 }
+
+void DisplayFile::rotateAll(double angle, point center){
+	double matrix [4][4];
+	point origin(0,0);
+	// perguntar se a rotação é em relação a origem ou ao centro da window
+	Utils::rotationMatrix(origin, angle, matrix);
+
+	GraphObj* g;
+
+	for (std::list<GraphObj*>::const_iterator it = objectList->begin();
+    it != objectList->end();
+    ++it) {
+    	g = *it;
+    	g->transformOnWindowRotation(matrix);
+	}
+  
+}

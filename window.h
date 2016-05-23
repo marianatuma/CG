@@ -1,9 +1,12 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
+#include "utils.hpp"
+
 class Window {
 private:
-	double xMax, yMax, xMin, yMin;
+	double xMax, yMax, xMin, yMin, height, width;
+	point vup;
 public:
 	Window(double xMax, double yMax,  double xMin = 0, double yMin = 0);
 	~Window();
@@ -16,6 +19,9 @@ public:
 	void moveY(double delta);
 	void zoomIn(double delta);
 	void zoomOut(double delta);
+	point getCenter();
+	void rotate(double angle);
+	double getAngle();
 };
 
 #endif

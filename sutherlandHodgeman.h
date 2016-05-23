@@ -1,18 +1,16 @@
 #ifndef COHENSUTHERLAND_HPP
 #define COHENSUTHERLAND_HPP
 
-#include "graphObj.h"
-#include "window.h"
 #include "polygon.h"
 #include "point.h"
+#include "clipping.h"
 
-class SutherlandHodgeman {
+class SutherlandHodgeman : public Clipping{
 public:
-	SutherlandHodgeman (Window* w);
-	void clip(GraphObj* g);
+	SutherlandHodgeman (Window* w) : Clipping(w){}
+	virtual void clip(GraphObj* g);
 
 private:
-	Window *window;
 	bool isInside(point a, point b, point c);
 	point intersection(point a, point b, point p, point q);
 	void clipPoint(GraphObj* g, point w[]);
