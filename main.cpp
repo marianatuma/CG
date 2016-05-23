@@ -153,6 +153,7 @@ static gboolean moveUp(GtkWidget *widget, GdkEventButton *event,
 {
     windowData->moveY(STEP);
     gtk_widget_queue_draw((GtkWidget*) user_data);
+    std::cout << "aqui";
     return TRUE;
 }
 
@@ -637,7 +638,7 @@ int main(int argc, char **argv)
     
     Polygon* l = new Polygon("line");
     l->addPoint(0, 0);
-    l->addPoint(100, 100);
+    l->addPoint(100, 0);
     displayFile->add(l);
 
     //l = new Polygon("line2");
