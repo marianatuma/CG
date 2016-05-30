@@ -148,7 +148,7 @@ static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr,
   return FALSE;
 }
 
-static gboolean moveUp(GtkWidget *widget, GdkEventButton *event,
+static gboolean moveUp(GtkWidget *widget,
     gpointer user_data)
 {
     windowData->moveY(STEP);
@@ -157,7 +157,7 @@ static gboolean moveUp(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
-static gboolean moveDown(GtkWidget *widget, GdkEventButton *event,
+static gboolean moveDown(GtkWidget *widget,
     gpointer user_data)
 {
     windowData->moveY(-STEP);
@@ -165,7 +165,7 @@ static gboolean moveDown(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
-static gboolean moveRight(GtkWidget *widget, GdkEventButton *event,
+static gboolean moveRight(GtkWidget *widget,
     gpointer user_data)
 {
     windowData->moveX(STEP);    
@@ -173,7 +173,7 @@ static gboolean moveRight(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
-static gboolean moveLeft(GtkWidget *widget, GdkEventButton *event,
+static gboolean moveLeft(GtkWidget *widget,
     gpointer user_data)
 {
     windowData->moveX(-STEP);    
@@ -181,7 +181,7 @@ static gboolean moveLeft(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
-static gboolean zoomIn(GtkWidget *widget, GdkEventButton *event,
+static gboolean zoomIn(GtkWidget *widget,
     gpointer user_data)
 {
     thicknessIncrement += 1.0;
@@ -190,7 +190,7 @@ static gboolean zoomIn(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
-static gboolean zoomOut(GtkWidget *widget, GdkEventButton *event,
+static gboolean zoomOut(GtkWidget *widget,
     gpointer user_data)
 {
     if(thicknessIncrement > 5.0)
@@ -200,7 +200,7 @@ static gboolean zoomOut(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
-static gboolean changeClipping(GtkWidget *widget, GdkEventButton *event,
+static gboolean changeClipping(GtkWidget *widget,
   gpointer user_data)
 {
   if(gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(cohenButton))){
@@ -259,7 +259,7 @@ static gboolean translate(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
 }
 
-static gboolean translateWindow(GtkWidget *widget, GdkEventButton *event,
+static gboolean translateWindow(GtkWidget *widget,
     gpointer user_data) {
   
   selectedObj = getSelected();
@@ -307,7 +307,7 @@ static gboolean scale(GtkWidget *widget, GdkEventButton *event,
   return TRUE;
 }
 
-static gboolean scaleWindow(GtkWidget *widget, GdkEventButton *event,
+static gboolean scaleWindow(GtkWidget *widget,
     gpointer user_data) {
   selectedObj = getSelected();
 
@@ -361,7 +361,7 @@ static gboolean rotate(GtkWidget *widget, GdkEventButton *event,
   return TRUE;
 }
 
-static gboolean rotateWindow(GtkWidget *widget, GdkEventButton *event,
+static gboolean rotateWindow(GtkWidget *widget,
     gpointer user_data) {
   selectedObj = getSelected();
 
@@ -582,7 +582,7 @@ static gboolean rotateW(GtkWidget *widget, GdkEventButton *event,
   return TRUE;
 }
 
-static gboolean rotateWindowWindow(GtkWidget *widget, GdkEventButton *event,
+static gboolean rotateWindowWindow(GtkWidget *widget,
     gpointer user_data) {
   GtkBuilder *builder;
   GError *error = NULL;
@@ -689,22 +689,22 @@ int main(int argc, char **argv)
     g_signal_connect(mainWindow, "delete_event", G_CALLBACK(exit_app), NULL);
     g_signal_connect(buttonClose, "clicked", G_CALLBACK(exit_app), NULL);
     g_signal_connect(G_OBJECT(drawingArea), "draw", G_CALLBACK(on_draw_event), NULL); 
-    g_signal_connect(G_OBJECT(buttonUp), "clicked", G_CALLBACK(moveUp), mainWindow);
-    g_signal_connect(G_OBJECT(buttonDown), "clicked", G_CALLBACK(moveDown), mainWindow);
-    g_signal_connect(G_OBJECT(buttonLeft), "clicked", G_CALLBACK(moveLeft), mainWindow);
-    g_signal_connect(G_OBJECT(buttonRight), "clicked", G_CALLBACK(moveRight), mainWindow);
-    g_signal_connect(G_OBJECT(buttonZoomIn), "clicked", G_CALLBACK(zoomIn), mainWindow);
-    g_signal_connect(G_OBJECT(buttonZoomOut), "clicked", G_CALLBACK(zoomOut), mainWindow);
-    g_signal_connect(G_OBJECT(translateButton), "clicked", G_CALLBACK(translateWindow), mainWindow);
-    g_signal_connect(G_OBJECT(rotateButton), "clicked", G_CALLBACK(rotateWindow), mainWindow);
-    g_signal_connect(G_OBJECT(scaleButton), "clicked", G_CALLBACK(scaleWindow), mainWindow);
+    g_signal_connect(G_OBJECT(buttonUp), "clicked", G_CALLBACK(moveUp), drawingArea);
+    g_signal_connect(G_OBJECT(buttonDown), "clicked", G_CALLBACK(moveDown), drawingArea);
+    g_signal_connect(G_OBJECT(buttonLeft), "clicked", G_CALLBACK(moveLeft), drawingArea);
+    g_signal_connect(G_OBJECT(buttonRight), "clicked", G_CALLBACK(moveRight), drawingArea);
+    g_signal_connect(G_OBJECT(buttonZoomIn), "clicked", G_CALLBACK(zoomIn), drawingArea);
+    g_signal_connect(G_OBJECT(buttonZoomOut), "clicked", G_CALLBACK(zoomOut), drawingArea);
+    g_signal_connect(G_OBJECT(translateButton), "clicked", G_CALLBACK(translateWindow), drawingArea);
+    g_signal_connect(G_OBJECT(rotateButton), "clicked", G_CALLBACK(rotateWindow), drawingArea);
+    g_signal_connect(G_OBJECT(scaleButton), "clicked", G_CALLBACK(scaleWindow), drawingArea);
     g_signal_connect(G_OBJECT(newLine), "clicked", G_CALLBACK(newLineWindow), NULL);
     g_signal_connect(G_OBJECT(newPolygon), "clicked", G_CALLBACK(newPolygonWindow), NULL);
     g_signal_connect(G_OBJECT(newPoint), "clicked", G_CALLBACK(newPointWindow), NULL);
-    g_signal_connect(G_OBJECT(cohenButton), "clicked", G_CALLBACK(changeClipping), mainWindow);
-    g_signal_connect(G_OBJECT(sutherlandButton), "clicked", G_CALLBACK(changeClipping), mainWindow);
-    g_signal_connect(G_OBJECT(noClippingButton), "clicked", G_CALLBACK(changeClipping), mainWindow);
-    g_signal_connect(G_OBJECT(rotateWindowButton), "clicked", G_CALLBACK(rotateWindowWindow), mainWindow);
+    g_signal_connect(G_OBJECT(cohenButton), "clicked", G_CALLBACK(changeClipping), drawingArea);
+    g_signal_connect(G_OBJECT(sutherlandButton), "clicked", G_CALLBACK(changeClipping), drawingArea);
+    g_signal_connect(G_OBJECT(noClippingButton), "clicked", G_CALLBACK(changeClipping), drawingArea);
+    g_signal_connect(G_OBJECT(rotateWindowButton), "clicked", G_CALLBACK(rotateWindowWindow), drawingArea);
     /* Connect signals */
     gtk_builder_connect_signals( mainBuilder, NULL );
    
